@@ -489,7 +489,13 @@ function filterDemandes() {
 function createDemandeCard(demande) {
     var imageUrl = '';
     if (demande.images && demande.images.length > 0) {
-        imageUrl = demande.images[0].url || demande.images[0];
+        var firstImage = demande.images[0];
+        // Gérer les différents formats d'image (objet avec url, string base64, ou string url)
+        if (typeof firstImage === 'object' && firstImage.url) {
+            imageUrl = firstImage.url;
+        } else if (typeof firstImage === 'string') {
+            imageUrl = firstImage;
+        }
     }
     
     var imageHtml = imageUrl 
@@ -667,14 +673,43 @@ async function submitDemande(e) {
         return;
     }
     
+    // Validation des champs
+    var titre = document.getElementById('demandeTitle').value.trim();
+    var categorie = document.getElementById('demandeCategory').value;
+    var budgetStr = document.getElementById('demandeBudget').value;
+    var description = document.getElementById('demandeDescription').value.trim();
+    
+    if (!titre) {
+        showToast('Veuillez entrer un titre', 'warning');
+        return;
+    }
+    if (!categorie) {
+        showToast('Veuillez sélectionner une catégorie', 'warning');
+        return;
+    }
+    if (!budgetStr || isNaN(parseFloat(budgetStr)) || parseFloat(budgetStr) <= 0) {
+        showToast('Veuillez entrer un budget valide', 'warning');
+        return;
+    }
+    if (!description) {
+        showToast('Veuillez entrer une description', 'warning');
+        return;
+    }
+    
     var data = {
-        titre: document.getElementById('demandeTitle').value,
-        categorie: document.getElementById('demandeCategory').value,
-        budget: parseFloat(document.getElementById('demandeBudget').value),
-        description: document.getElementById('demandeDescription').value,
-        localisation: document.getElementById('demandeLocation').value || state.user.localisation,
-        images: state.demandeImages
+        titre: titre,
+        categorie: categorie,
+        budget: parseFloat(budgetStr),
+        description: description,
+        localisation: document.getElementById('demandeLocation').value || state.user.localisation || '',
+        images: state.demandeImages || []
     };
+    
+    // Afficher un indicateur de chargement
+    var submitBtn = document.querySelector('#publishForm button[type="submit"]');
+    var originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publication en cours...';
+    submitBtn.disabled = true;
     
     try {
         await apiCall('/demandes', {
@@ -693,7 +728,12 @@ async function submitDemande(e) {
         showSection('demandes');
         
     } catch (error) {
-        showToast(error.message, 'error');
+        console.error('Erreur création demande:', error);
+        showToast(error.message || 'Erreur lors de la publication', 'error');
+    } finally {
+        // Restaurer le bouton
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
     }
 }
 

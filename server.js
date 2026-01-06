@@ -404,6 +404,55 @@ app.put('/api/users/:id', authMiddleware, async (req, res) => {
 //                         📋 ENDPOINTS DEMANDES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Fonction helper pour uploader une image base64 vers Cloudinary
+async function uploadBase64ToCloudinary(base64Image) {
+    try {
+        // Vérifier si c'est déjà une URL (pas base64)
+        if (base64Image && typeof base64Image === 'string' && base64Image.startsWith('http')) {
+            return { url: base64Image, publicId: '' };
+        }
+        
+        // Vérifier si c'est un objet avec url
+        if (base64Image && typeof base64Image === 'object' && base64Image.url) {
+            return base64Image;
+        }
+        
+        // Si c'est une chaîne base64
+        if (base64Image && typeof base64Image === 'string' && base64Image.startsWith('data:image')) {
+            // Vérifier si Cloudinary est configuré
+            if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
+                const result = await cloudinary.uploader.upload(base64Image, {
+                    folder: 'marketplace_pro',
+                    transformation: [{ width: 1200, height: 1200, crop: 'limit', quality: 'auto' }]
+                });
+                return {
+                    url: result.secure_url,
+                    publicId: result.public_id
+                };
+            } else {
+                // Si Cloudinary n'est pas configuré, stocker le base64 directement
+                console.warn('⚠️ Cloudinary non configuré, stockage base64 direct');
+                return {
+                    url: base64Image,
+                    publicId: ''
+                };
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Cloudinary upload error:', error.message);
+        // En cas d'erreur Cloudinary, stocker le base64 directement
+        if (base64Image && typeof base64Image === 'string' && base64Image.startsWith('data:image')) {
+            return {
+                url: base64Image,
+                publicId: ''
+            };
+        }
+        return null;
+    }
+}
+
 // POST /api/demandes - Créer une demande
 app.post('/api/demandes', authMiddleware, async (req, res) => {
     try {
@@ -413,12 +462,23 @@ app.post('/api/demandes', authMiddleware, async (req, res) => {
             return res.status(400).json({ error: 'Champs obligatoires manquants' });
         }
 
+        // Upload des images vers Cloudinary si présentes
+        let uploadedImages = [];
+        if (images && images.length > 0) {
+            for (const img of images) {
+                const uploaded = await uploadBase64ToCloudinary(img);
+                if (uploaded) {
+                    uploadedImages.push(uploaded);
+                }
+            }
+        }
+
         const newDemande = new Demande({
             acheteurId: req.user._id,
             titre,
             description,
             budget: parseFloat(budget),
-            images: images || [],
+            images: uploadedImages,
             categorie,
             localisation: localisation || req.user.localisation
         });
@@ -565,11 +625,22 @@ app.post('/api/demandes/:id/reponses', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'Demande non trouvée' });
         }
 
+        // Upload des images vers Cloudinary si présentes
+        let uploadedImages = [];
+        if (images && images.length > 0) {
+            for (const img of images) {
+                const uploaded = await uploadBase64ToCloudinary(img);
+                if (uploaded) {
+                    uploadedImages.push(uploaded);
+                }
+            }
+        }
+
         const newReponse = new Reponse({
             demandeId: demande._id,
             vendeurId: req.user._id,
             message,
-            images: images || []
+            images: uploadedImages
         });
 
         await newReponse.save();
@@ -640,6 +711,17 @@ app.post('/api/messages', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'Destinataire non trouvé' });
         }
 
+        // Upload des images vers Cloudinary si présentes
+        let uploadedImages = [];
+        if (images && images.length > 0) {
+            for (const img of images) {
+                const uploaded = await uploadBase64ToCloudinary(img);
+                if (uploaded) {
+                    uploadedImages.push(uploaded);
+                }
+            }
+        }
+
         const newMessage = new Message({
             conversationId,
             demandeId,
@@ -647,7 +729,7 @@ app.post('/api/messages', authMiddleware, async (req, res) => {
             senderId: req.user._id,
             receiverId,
             message,
-            images: images || []
+            images: uploadedImages
         });
 
         await newMessage.save();
