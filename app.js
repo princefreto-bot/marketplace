@@ -411,12 +411,24 @@ function updateUIForLoggedInUser() {
         }
     } else {
         document.getElementById('navPublish').style.display = 'block';
+        if (document.getElementById('mobileNavPublish')) {
+            document.getElementById('mobileNavPublish').style.display = 'flex';
+        }
     }
     
     // Show admin link for admins
     if (state.user.role === 'admin') {
         document.getElementById('navAdmin').style.display = 'flex';
         document.getElementById('dropdownAdmin').style.display = 'flex';
+        if (document.getElementById('mobileNavAdmin')) {
+            document.getElementById('mobileNavAdmin').style.display = 'flex';
+        }
+    } else {
+        document.getElementById('navAdmin').style.display = 'none';
+        document.getElementById('dropdownAdmin').style.display = 'none';
+        if (document.getElementById('mobileNavAdmin')) {
+            document.getElementById('mobileNavAdmin').style.display = 'none';
+        }
     }
     
     loadNotifications();
@@ -986,9 +998,23 @@ function toggleNotifications() {
     panel.classList.toggle('show');
     document.getElementById('userDropdown').classList.remove('show');
     
+    // Fermer le menu mobile si ouvert
+    var mobileMenu = document.getElementById('mobileMenu');
+    if (mobileMenu.classList.contains('show')) {
+        toggleMobileMenu();
+    }
+    
     if (panel.classList.contains('show')) {
         loadNotifications();
     }
+}
+
+function closeNotifications() {
+    document.getElementById('notificationPanel').classList.remove('show');
+}
+
+function closeUserDropdown() {
+    document.getElementById('userDropdown').classList.remove('show');
 }
 
 async function loadNotifications() {
@@ -1070,23 +1096,56 @@ async function loadNotifications() {
 }
 
 async function handleNotificationClick(notificationId, type, data) {
+    // Fermer le panel de notifications
+    document.getElementById('notificationPanel').classList.remove('show');
+    
+    // Marquer comme lu
     try {
         await apiCall('/notifications/' + notificationId + '/read', { method: 'PUT' });
     } catch (e) {
         console.error('Error marking notification as read:', e);
     }
     
-    document.getElementById('notificationPanel').classList.remove('show');
-    
-    if (type === 'message' && data.conversationId) {
-        startConversation(data.senderId, data.senderNom, data.demandeId, data.demandeTitre);
-    } else if (type === 'reponse' && data.demandeId) {
-        showDemandeDetail(data.demandeId);
-    } else if (type === 'nouvelle_demande' && data.demandeId) {
-        showDemandeDetail(data.demandeId);
+    // Redirection directe selon le type de notification
+    if (type === 'message') {
+        // Nouveau message -> Ouvrir directement le chat
+        if (data && data.senderId && data.senderNom) {
+            var demandeId = data.demandeId || '';
+            var demandeTitre = data.demandeTitre || 'Conversation';
+            startConversation(data.senderId, data.senderNom, demandeId, demandeTitre);
+        } else if (data && data.conversationId) {
+            // Fallback: ouvrir la section messages
+            showSection('messages');
+        }
+    } else if (type === 'reponse') {
+        // Nouvelle réponse sur une demande -> Aller directement à la demande
+        if (data && data.demandeId) {
+            showDemandeDetail(data.demandeId);
+            showToast('Nouvelle réponse de ' + (data.vendeurNom || 'un vendeur'), 'info');
+        }
+    } else if (type === 'nouvelle_demande') {
+        // Nouvelle demande publiée (pour vendeurs) -> Aller directement à la demande
+        if (data && data.demandeId) {
+            showDemandeDetail(data.demandeId);
+        } else {
+            showSection('demandes');
+        }
+    } else if (type === 'admin') {
+        // Message admin -> Afficher dans l'espace utilisateur ou toast
+        showToast(data?.message || 'Message de l\'administration', 'info');
+        showSection('espace');
+    } else if (type === 'ban' || type === 'unban') {
+        // Notification de bannissement
+        showToast(data?.message || 'Notification', type === 'ban' ? 'warning' : 'success');
+    } else {
+        // Fallback
+        showSection('home');
     }
     
-    loadNotifications();
+    // Recharger les notifications après un court délai
+    setTimeout(function() {
+        loadNotifications();
+    }, 500);
 }
 
 async function markAllAsRead() {
@@ -1122,6 +1181,12 @@ function stopPolling() {
 function toggleUserDropdown() {
     document.getElementById('userDropdown').classList.toggle('show');
     document.getElementById('notificationPanel').classList.remove('show');
+    
+    // Fermer le menu mobile si ouvert
+    var mobileMenu = document.getElementById('mobileMenu');
+    if (mobileMenu.classList.contains('show')) {
+        toggleMobileMenu();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1265,6 +1330,17 @@ async function loadAdminDashboard() {
     loadAdminTab('dashboard', document.querySelector('.admin-nav-item'));
 }
 
+function loadAdminTabMobile(tab, element) {
+    // Update active nav for mobile
+    document.querySelectorAll('.admin-mobile-nav-item').forEach(function(item) {
+        item.classList.remove('active');
+    });
+    if (element) element.classList.add('active');
+    
+    // Load the tab
+    loadAdminTab(tab, null);
+}
+
 async function loadAdminTab(tab, element) {
     // Update active nav
     document.querySelectorAll('.admin-nav-item').forEach(function(item) {
@@ -1303,65 +1379,67 @@ async function loadAdminTab(tab, element) {
         } else if (tab === 'users') {
             var users = await apiCall('/admin/users');
             
-            content.innerHTML = 
-                '<div class="admin-header"><h1 class="admin-title">Gestion des utilisateurs</h1></div>' +
-                '<div class="admin-table-container">' +
-                    '<div class="admin-table-header">' +
-                        '<h3 class="admin-table-title">Liste des utilisateurs (' + users.length + ')</h3>' +
+            // Version mobile avec cards
+            var usersCardsHtml = users.map(function(u) {
+                var uId = u._id || u.id;
+                return '<div class="admin-user-card">' +
+                    '<div class="admin-card-header">' +
+                        '<div class="admin-card-avatar">' + getInitials(u.nom) + '</div>' +
+                        '<div class="admin-card-info">' +
+                            '<h4>' + escapeHtml(u.nom) + '</h4>' +
+                            '<span>' + escapeHtml(u.email) + '</span>' +
+                        '</div>' +
                     '</div>' +
-                    '<table class="admin-table">' +
-                        '<thead><tr><th>Utilisateur</th><th>Rôle</th><th>Statut</th><th>Inscription</th><th>Actions</th></tr></thead>' +
-                        '<tbody>' +
-                            users.map(function(u) {
-                                var uId = u._id || u.id;
-                                return '<tr>' +
-                                    '<td><div class="user-cell"><div class="user-cell-avatar">' + getInitials(u.nom) + '</div><div class="user-cell-info"><h4>' + escapeHtml(u.nom) + '</h4><span>' + escapeHtml(u.email) + '</span></div></div></td>' +
-                                    '<td>' + escapeHtml(u.role) + '</td>' +
-                                    '<td><span class="status-badge ' + (u.isBanned ? 'banned' : 'active') + '">' + (u.isBanned ? 'Banni' : 'Actif') + '</span></td>' +
-                                    '<td>' + formatDate(u.dateCreation) + '</td>' +
-                                    '<td><div class="action-buttons">' +
-                                        '<button class="action-btn message" onclick="openAdminMessageModal(\'' + uId + '\', \'' + escapeHtml(u.nom) + '\')" title="Envoyer message"><i class="fas fa-envelope"></i></button>' +
-                                        (u.isBanned 
-                                            ? '<button class="action-btn unban" onclick="unbanUser(\'' + uId + '\')" title="Débannir"><i class="fas fa-user-check"></i></button>'
-                                            : '<button class="action-btn ban" onclick="openBanModal(\'' + uId + '\', \'' + escapeHtml(u.nom) + '\')" title="Bannir"><i class="fas fa-user-slash"></i></button>'
-                                        ) +
-                                    '</div></td>' +
-                                '</tr>';
-                            }).join('') +
-                        '</tbody>' +
-                    '</table>' +
+                    '<div class="admin-card-meta">' +
+                        '<span class="status-badge ' + (u.isBanned ? 'banned' : 'active') + '">' + (u.isBanned ? 'Banni' : 'Actif') + '</span>' +
+                        '<span class="status-badge pending">' + escapeHtml(u.role) + '</span>' +
+                    '</div>' +
+                    '<div class="admin-card-actions">' +
+                        '<button class="action-btn message" onclick="openAdminMessageModal(\'' + uId + '\', \'' + escapeHtml(u.nom) + '\')"><i class="fas fa-envelope"></i> Message</button>' +
+                        (u.isBanned 
+                            ? '<button class="action-btn unban" onclick="unbanUser(\'' + uId + '\')"><i class="fas fa-user-check"></i> Débannir</button>'
+                            : '<button class="action-btn ban" onclick="openBanModal(\'' + uId + '\', \'' + escapeHtml(u.nom) + '\')"><i class="fas fa-user-slash"></i> Bannir</button>'
+                        ) +
+                    '</div>' +
+                '</div>';
+            }).join('');
+            
+            content.innerHTML = 
+                '<div class="admin-header"><h1 class="admin-title">Utilisateurs (' + users.length + ')</h1></div>' +
+                '<div class="admin-table-container">' +
+                    '<div class="admin-card-list">' + usersCardsHtml + '</div>' +
                 '</div>';
                 
         } else if (tab === 'posts') {
             var posts = await apiCall('/admin/posts');
             
-            content.innerHTML = 
-                '<div class="admin-header"><h1 class="admin-title">Gestion des publications</h1></div>' +
-                '<div class="admin-table-container">' +
-                    '<div class="admin-table-header">' +
-                        '<h3 class="admin-table-title">Toutes les publications (' + posts.length + ')</h3>' +
+            // Version mobile avec cards
+            var postsCardsHtml = posts.map(function(p) {
+                var pId = p._id || p.id;
+                var authorName = p.acheteurId?.nom || 'Inconnu';
+                var authorId = p.acheteurId?._id || p.acheteurId;
+                return '<div class="admin-post-card">' +
+                    '<div class="admin-card-header">' +
+                        '<div class="admin-card-info" style="flex: 1;">' +
+                            '<h4>' + escapeHtml(p.titre) + '</h4>' +
+                            '<span>Par ' + escapeHtml(authorName) + ' • ' + formatDate(p.dateCreation) + '</span>' +
+                        '</div>' +
                     '</div>' +
-                    '<table class="admin-table">' +
-                        '<thead><tr><th>Publication</th><th>Auteur</th><th>Catégorie</th><th>Budget</th><th>Date</th><th>Actions</th></tr></thead>' +
-                        '<tbody>' +
-                            posts.map(function(p) {
-                                var pId = p._id || p.id;
-                                var authorName = p.acheteurId?.nom || 'Inconnu';
-                                var authorId = p.acheteurId?._id || p.acheteurId;
-                                return '<tr>' +
-                                    '<td><h4 style="font-weight: 600;">' + escapeHtml(p.titre) + '</h4></td>' +
-                                    '<td>' + escapeHtml(authorName) + '</td>' +
-                                    '<td><span class="card-badge">' + escapeHtml(p.categorie) + '</span></td>' +
-                                    '<td>' + formatPrice(p.budget) + '</td>' +
-                                    '<td>' + formatDate(p.dateCreation) + '</td>' +
-                                    '<td><div class="action-buttons">' +
-                                        '<button class="action-btn view" onclick="showDemandeDetail(\'' + pId + '\')" title="Voir"><i class="fas fa-eye"></i></button>' +
-                                        '<button class="action-btn delete" onclick="adminDeletePost(\'' + pId + '\', \'' + authorId + '\')" title="Supprimer"><i class="fas fa-trash"></i></button>' +
-                                    '</div></td>' +
-                                '</tr>';
-                            }).join('') +
-                        '</tbody>' +
-                    '</table>' +
+                    '<div class="admin-card-meta">' +
+                        '<span class="status-badge pending">' + escapeHtml(p.categorie) + '</span>' +
+                        '<span style="font-weight: 700; color: var(--primary);">' + formatPrice(p.budget) + '</span>' +
+                    '</div>' +
+                    '<div class="admin-card-actions">' +
+                        '<button class="action-btn view" onclick="showDemandeDetail(\'' + pId + '\')"><i class="fas fa-eye"></i> Voir</button>' +
+                        '<button class="action-btn delete" onclick="adminDeletePost(\'' + pId + '\', \'' + authorId + '\')"><i class="fas fa-trash"></i> Supprimer</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+            
+            content.innerHTML = 
+                '<div class="admin-header"><h1 class="admin-title">Publications (' + posts.length + ')</h1></div>' +
+                '<div class="admin-table-container">' +
+                    '<div class="admin-card-list">' + postsCardsHtml + '</div>' +
                 '</div>';
                 
         } else if (tab === 'social') {
