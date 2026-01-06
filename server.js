@@ -15,12 +15,25 @@ const PORT = process.env.PORT || 3000;
 //                         🔧 CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Variables d'environnement (à configurer sur Render)
-const JWT_SECRET = process.env.JWT_SECRET || 'marketplace_pro_secret_key_2024';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/marketplace_pro';
-const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'demo';
+// Variables d'environnement (OBLIGATOIRES en production sur Render)
+const JWT_SECRET = process.env.JWT_SECRET;
+const MONGODB_URI = process.env.MONGODB_URI;
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
+
+// Vérification des variables d'environnement critiques
+if (!MONGODB_URI) {
+    console.error('❌ ERREUR FATALE: La variable MONGODB_URI est obligatoire !');
+    console.error('   Configurez-la dans les variables d\'environnement de Render.');
+    process.exit(1);
+}
+
+if (!JWT_SECRET) {
+    console.error('❌ ERREUR FATALE: La variable JWT_SECRET est obligatoire !');
+    console.error('   Configurez-la dans les variables d\'environnement de Render.');
+    process.exit(1);
+}
 
 // Configuration Cloudinary
 cloudinary.config({
@@ -1343,39 +1356,81 @@ async function initializeDatabase() {
     }
 }
 
-async function startServer() {
+// ═══════════════════════════════════════════════════════════════════════════════
+//                         🔗 CONNEXION MONGODB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function connectDB() {
     try {
-        // Connexion MongoDB
-        await mongoose.connect(MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true
-        });
-        console.log('✅ Connecté à MongoDB');
-
-        // Initialiser données
-        await initializeDatabase();
-
-        // Démarrer serveur
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log('═══════════════════════════════════════════════════════════════');
-            console.log('   🚀 MarketPlace Pro - Serveur Production démarré');
-            console.log('═══════════════════════════════════════════════════════════════');
-            console.log(`   📍 URL: http://localhost:${PORT}`);
-            console.log('   📧 Comptes de test:');
-            console.log('      - Admin: admin@marketplace.pro / admin123');
-            console.log('      - Acheteur: marie@test.com / password123');
-            console.log('      - Vendeur: jean@test.com / password123');
-            console.log('═══════════════════════════════════════════════════════════════');
-        });
-    } catch (error) {
-        console.error('❌ Erreur de démarrage:', error);
+        console.log('🔄 Connexion à MongoDB Atlas...');
         
-        // Fallback: démarrer sans MongoDB (mode mémoire)
-        console.log('⚠️ Démarrage en mode dégradé (sans MongoDB)...');
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`Serveur démarré sur http://localhost:${PORT} (mode dégradé)`);
-        });
+        // Mongoose v7+ : plus besoin de useNewUrlParser et useUnifiedTopology
+        await mongoose.connect(MONGODB_URI);
+        
+        console.log('✅ Connecté à MongoDB Atlas avec succès !');
+        return true;
+    } catch (error) {
+        console.error('❌ Échec de connexion à MongoDB:');
+        console.error('   Message:', error.message);
+        console.error('');
+        console.error('📋 Vérifiez que:');
+        console.error('   1. MONGODB_URI est correctement configuré dans Render');
+        console.error('   2. Le mot de passe ne contient pas de caractères spéciaux non encodés');
+        console.error('   3. L\'IP de Render est autorisée (Network Access → Allow from Anywhere)');
+        console.error('   4. Le cluster MongoDB Atlas est actif');
+        console.error('');
+        return false;
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//                         🚀 DÉMARRAGE DU SERVEUR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function startServer() {
+    // Étape 1: Connexion obligatoire à MongoDB
+    const isConnected = await connectDB();
+    
+    if (!isConnected) {
+        console.error('');
+        console.error('═══════════════════════════════════════════════════════════════');
+        console.error('   ❌ ARRÊT DU SERVEUR - MongoDB non connecté');
+        console.error('═══════════════════════════════════════════════════════════════');
+        console.error('   Le serveur ne peut pas démarrer sans connexion à MongoDB.');
+        console.error('   Corrigez la configuration MONGODB_URI et redéployez.');
+        console.error('═══════════════════════════════════════════════════════════════');
+        process.exit(1);
+    }
+
+    // Étape 2: Initialiser les données par défaut
+    await initializeDatabase();
+
+    // Étape 3: Démarrer le serveur HTTP
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('   🚀 MarketPlace Pro - Serveur Production');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log(`   📍 Port: ${PORT}`);
+        console.log(`   🌍 Environnement: ${process.env.NODE_ENV || 'development'}`);
+        console.log('   📧 Comptes de test:');
+        console.log('      - Admin: admin@marketplace.pro / admin123');
+        console.log('      - Acheteur: marie@test.com / password123');
+        console.log('      - Vendeur: jean@test.com / password123');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('   ✅ Serveur prêt à recevoir des requêtes !');
+        console.log('═══════════════════════════════════════════════════════════════');
+    });
+}
+
+// Gestion des erreurs Mongoose non capturées
+mongoose.connection.on('error', (err) => {
+    console.error('❌ Erreur MongoDB:', err.message);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️ Déconnecté de MongoDB');
+});
+
+// Démarrer l'application
 startServer();
