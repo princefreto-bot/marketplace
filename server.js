@@ -2,6 +2,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import compression from 'compression';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,8 +20,19 @@ app.use(express.static(join(__dirname, 'dist'), {
 }));
 
 // Handle SPA routing - serve index.html for all routes
-app.get('*', (req, res) => {
-  res.sendFile(join(__dirname, 'dist', 'index.html'));
+// Using middleware instead of app.get('*') for Express 5 compatibility
+app.use((req, res, next) => {
+  // Only handle GET requests for HTML pages
+  if (req.method === 'GET' && req.accepts('html')) {
+    const indexPath = join(__dirname, 'dist', 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).send('Application not built. Run npm run build first.');
+    }
+  } else {
+    next();
+  }
 });
 
 // Start server
