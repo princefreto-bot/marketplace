@@ -1,8 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         🔧 CONFIGURATION & ÉTAT
+//                   MARKETPLACE PRO - JAVASCRIPT PRINCIPAL
+//                   Version: 4.0 - Full Production
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const API_URL = window.location.origin + '/api';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                         STATE MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
 
 const state = {
     user: null,
@@ -16,17 +21,19 @@ const state = {
     responseImages: [],
     chatImages: [],
     notificationPolling: null,
-    messagePolling: null
+    messagePolling: null,
+    heroSliderInterval: null,
+    currentSlide: 0
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         🚀 INITIALISATION
+//                         INITIALIZATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 MarketPlace Pro v3.0 - Mobile Optimized');
+    console.log('🚀 MarketPlace Pro v4.0 - Full Production');
     
-    // Restaurer session
+    // Restore session
     const savedToken = localStorage.getItem('marketplace_token');
     const savedUser = localStorage.getItem('marketplace_user');
     
@@ -42,14 +49,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Charger données initiales
+    // Load initial data
     loadStats();
     loadRecentDemandes();
+    loadTopAnnonces();
     loadSocialLinks();
+    loadHeroSliders();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         📡 API CALLS
+//                         API CALLS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function apiCall(endpoint, options = {}) {
@@ -82,7 +91,7 @@ async function apiCall(endpoint, options = {}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         🎨 UI HELPERS
+//                         UI HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function showToast(message, type = 'info') {
@@ -126,7 +135,7 @@ function formatTime(dateString) {
 
 function getInitials(name) {
     if (!name) return '?';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    return name.split(' ').map(function(n) { return n[0]; }).join('').toUpperCase().slice(0, 2);
 }
 
 function formatPrice(price) {
@@ -142,44 +151,46 @@ function escapeHtml(text) {
 
 function getImageUrl(image) {
     if (!image) return '';
-    if (typeof image === 'string') {
-        return image;
-    }
-    if (typeof image === 'object' && image.url) {
-        return image.url;
-    }
+    if (typeof image === 'string') return image;
+    if (typeof image === 'object' && image.url) return image.url;
     return '';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         📍 NAVIGATION
+//                         NAVIGATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function showSection(sectionId) {
-    // Fermer tous les panels
+    // Close all panels
     closeNotifications();
     closeUserPanel();
     closeChat();
     
-    // Cacher toutes les sections
-    document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+    // Hide all sections
+    document.querySelectorAll('.page-section').forEach(function(s) {
+        s.classList.remove('active');
+    });
     
-    // Mettre à jour nav links
-    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-    document.querySelectorAll('.bottom-nav-item').forEach(l => l.classList.remove('active'));
+    // Update nav links
+    document.querySelectorAll('.nav-link').forEach(function(l) {
+        l.classList.remove('active');
+    });
+    document.querySelectorAll('.bottom-nav-item').forEach(function(l) {
+        l.classList.remove('active');
+    });
     
-    const activeNavLink = document.querySelector('.nav-link[data-section="' + sectionId + '"]');
+    var activeNavLink = document.querySelector('.nav-link[data-section="' + sectionId + '"]');
     if (activeNavLink) activeNavLink.classList.add('active');
     
-    const activeBottomNav = document.querySelector('.bottom-nav-item[data-section="' + sectionId + '"]');
+    var activeBottomNav = document.querySelector('.bottom-nav-item[data-section="' + sectionId + '"]');
     if (activeBottomNav) activeBottomNav.classList.add('active');
     
-    // Afficher/cacher footer
-    const footer = document.getElementById('mainFooter');
+    // Show/hide footer
+    var footer = document.getElementById('mainFooter');
     footer.style.display = sectionId === 'admin' ? 'none' : 'block';
     
     // Map sections
-    const sectionMap = {
+    var sectionMap = {
         'home': 'sectionHome',
         'demandes': 'sectionDemandes',
         'detail': 'sectionDetail',
@@ -189,10 +200,10 @@ function showSection(sectionId) {
         'admin': 'sectionAdmin'
     };
     
-    const targetSection = document.getElementById(sectionMap[sectionId]);
+    var targetSection = document.getElementById(sectionMap[sectionId]);
     if (targetSection) targetSection.classList.add('active');
     
-    // Charger données
+    // Load data
     if (sectionId === 'demandes') loadDemandes();
     else if (sectionId === 'messages' && state.user) loadConversations();
     else if (sectionId === 'espace' && state.user) setupEspaceUtilisateur();
@@ -217,8 +228,88 @@ function handlePublishClick() {
     showSection('publish');
 }
 
+function filterByCategory(category) {
+    document.getElementById('categoryFilter').value = category;
+    showSection('demandes');
+    setTimeout(filterDemandes, 100);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         🔐 AUTHENTIFICATION
+//                         HERO SLIDER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function loadHeroSliders() {
+    try {
+        const sliders = await apiCall('/admin/sliders').catch(function() { return []; });
+        
+        if (sliders && sliders.length > 0) {
+            var activeSliders = sliders.filter(function(s) { return s.isActive; });
+            
+            if (activeSliders.length > 0) {
+                var sliderContainer = document.getElementById('heroSlider');
+                var dotsContainer = document.getElementById('heroDots');
+                var heroSection = document.getElementById('heroSection');
+                
+                heroSection.classList.remove('hero-default');
+                
+                sliderContainer.innerHTML = activeSliders.map(function(slider, index) {
+                    return '<div class="hero-slide ' + (index === 0 ? 'active' : '') + '" style="background-image: url(\'' + getImageUrl(slider.image) + '\')"></div>';
+                }).join('');
+                
+                if (activeSliders.length > 1) {
+                    dotsContainer.innerHTML = activeSliders.map(function(_, index) {
+                        return '<div class="hero-dot ' + (index === 0 ? 'active' : '') + '" onclick="goToSlide(' + index + ')"></div>';
+                    }).join('');
+                    
+                    // Auto-slide
+                    if (state.heroSliderInterval) clearInterval(state.heroSliderInterval);
+                    state.heroSliderInterval = setInterval(nextSlide, 5000);
+                }
+                
+                // Update text from first slider
+                if (activeSliders[0].title) {
+                    document.getElementById('heroTitle').textContent = activeSliders[0].title;
+                }
+                if (activeSliders[0].description) {
+                    document.getElementById('heroSubtitle').textContent = activeSliders[0].description;
+                }
+            }
+        }
+    } catch (error) {
+        console.log('Hero sliders not available');
+    }
+}
+
+function nextSlide() {
+    var slides = document.querySelectorAll('.hero-slide');
+    var dots = document.querySelectorAll('.hero-dot');
+    
+    if (slides.length <= 1) return;
+    
+    slides[state.currentSlide].classList.remove('active');
+    dots[state.currentSlide].classList.remove('active');
+    
+    state.currentSlide = (state.currentSlide + 1) % slides.length;
+    
+    slides[state.currentSlide].classList.add('active');
+    dots[state.currentSlide].classList.add('active');
+}
+
+function goToSlide(index) {
+    var slides = document.querySelectorAll('.hero-slide');
+    var dots = document.querySelectorAll('.hero-dot');
+    
+    slides[state.currentSlide].classList.remove('active');
+    dots[state.currentSlide].classList.remove('active');
+    
+    state.currentSlide = index;
+    
+    slides[state.currentSlide].classList.add('active');
+    dots[state.currentSlide].classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                         AUTHENTICATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function showAuthModal() {
@@ -231,7 +322,7 @@ function closeAuthModal() {
 }
 
 function switchAuthTab(tab) {
-    document.querySelectorAll('.auth-tab').forEach((t, i) => {
+    document.querySelectorAll('.auth-tab').forEach(function(t, i) {
         t.classList.toggle('active', (tab === 'login' && i === 0) || (tab === 'register' && i === 1));
     });
     
@@ -242,20 +333,22 @@ function switchAuthTab(tab) {
 
 function selectRole(role, element) {
     document.getElementById('registerRole').value = role;
-    document.querySelectorAll('.role-option').forEach(o => o.classList.remove('selected'));
+    document.querySelectorAll('.role-option').forEach(function(o) {
+        o.classList.remove('selected');
+    });
     element.classList.add('selected');
 }
 
 async function handleLogin(e) {
     e.preventDefault();
     
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
+    var email = document.getElementById('loginEmail').value;
+    var password = document.getElementById('loginPassword').value;
     
     try {
-        const response = await apiCall('/login', {
+        var response = await apiCall('/login', {
             method: 'POST',
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ email: email, password: password })
         });
         
         state.token = response.token;
@@ -278,7 +371,7 @@ async function handleLogin(e) {
 async function handleRegister(e) {
     e.preventDefault();
     
-    const data = {
+    var data = {
         role: document.getElementById('registerRole').value,
         nom: document.getElementById('registerName').value,
         email: document.getElementById('registerEmail').value,
@@ -288,7 +381,7 @@ async function handleRegister(e) {
     };
     
     try {
-        const response = await apiCall('/register', {
+        var response = await apiCall('/register', {
             method: 'POST',
             body: JSON.stringify(data)
         });
@@ -335,16 +428,16 @@ function updateUIForLoggedInUser() {
     document.getElementById('notificationBtn').style.display = 'flex';
     document.getElementById('btnLogin').style.display = 'none';
     
-    const initials = getInitials(state.user.nom);
+    var initials = getInitials(state.user.nom);
     document.getElementById('navAvatar').textContent = initials;
     document.getElementById('userAvatarLarge').textContent = initials;
     document.getElementById('userName').textContent = state.user.nom;
     
-    const roleTexts = { 'acheteur': 'Acheteur', 'vendeur': 'Vendeur', 'admin': 'Administrateur' };
+    var roleTexts = { 'acheteur': 'Acheteur', 'vendeur': 'Vendeur', 'admin': 'Administrateur' };
     document.getElementById('userRole').textContent = roleTexts[state.user.role] || 'Utilisateur';
     
-    // Afficher/cacher publier selon rôle
-    const navPublish = document.getElementById('navPublish');
+    // Show/hide publish based on role
+    var navPublish = document.getElementById('navPublish');
     if (navPublish) navPublish.style.display = state.user.role === 'vendeur' ? 'none' : 'block';
     
     // Admin
@@ -357,13 +450,13 @@ function updateUIForLoggedInUser() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         🔔 NOTIFICATIONS
+//                         NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function toggleNotifications() {
     closeUserPanel();
-    const overlay = document.getElementById('notificationOverlay');
-    const panel = document.getElementById('notificationPanel');
+    var overlay = document.getElementById('notificationOverlay');
+    var panel = document.getElementById('notificationPanel');
     
     if (panel.classList.contains('show')) {
         closeNotifications();
@@ -381,8 +474,8 @@ function closeNotifications() {
 
 function toggleUserPanel() {
     closeNotifications();
-    const overlay = document.getElementById('userOverlay');
-    const panel = document.getElementById('userPanel');
+    var overlay = document.getElementById('userOverlay');
+    var panel = document.getElementById('userPanel');
     
     if (panel.classList.contains('show')) {
         closeUserPanel();
@@ -400,14 +493,14 @@ function closeUserPanel() {
 async function loadNotifications() {
     if (!state.user) return;
     
-    const userId = state.user._id || state.user.id;
+    var userId = state.user._id || state.user.id;
     
     try {
-        const notifications = await apiCall('/notifications/' + userId + '/unread');
+        var notifications = await apiCall('/notifications/' + userId + '/unread');
         state.notifications = notifications || [];
         
         // Badge
-        const badge = document.getElementById('notificationBadge');
+        var badge = document.getElementById('notificationBadge');
         if (state.notifications.length > 0) {
             badge.textContent = state.notifications.length > 99 ? '99+' : state.notifications.length;
             badge.style.display = 'flex';
@@ -415,29 +508,30 @@ async function loadNotifications() {
             badge.style.display = 'none';
         }
         
-        // Liste
-        const list = document.getElementById('notificationList');
+        // List
+        var list = document.getElementById('notificationList');
         if (state.notifications.length === 0) {
-            list.innerHTML = '<div class="notification-empty"><i class="fas fa-bell-slash"></i><p>Aucune notification</p></div>';
+            list.innerHTML = '<div class="empty-state"><i class="fas fa-bell-slash"></i><p>Aucune notification</p></div>';
         } else {
-            list.innerHTML = state.notifications.map(n => {
-                let icon, iconClass, text;
+            list.innerHTML = state.notifications.map(function(n) {
+                var icon, iconClass, text;
+                var nData = n.data || {};
                 
                 switch(n.type) {
                     case 'message':
                         icon = 'comment';
                         iconClass = 'message';
-                        text = '<strong>' + escapeHtml(n.data?.senderNom || 'Quelqu\'un') + '</strong> vous a envoyé un message';
+                        text = '<strong>' + escapeHtml(nData.senderNom || 'Quelqu\'un') + '</strong> vous a envoyé un message';
                         break;
                     case 'reponse':
                         icon = 'reply';
                         iconClass = 'reponse';
-                        text = '<strong>' + escapeHtml(n.data?.vendeurNom || 'Un vendeur') + '</strong> a répondu à votre demande';
+                        text = '<strong>' + escapeHtml(nData.vendeurNom || 'Un vendeur') + '</strong> a répondu à votre demande';
                         break;
                     case 'nouvelle_demande':
                         icon = 'bullhorn';
                         iconClass = 'demande';
-                        text = 'Nouvelle demande: <strong>' + escapeHtml(n.data?.demandeTitre || '') + '</strong>';
+                        text = 'Nouvelle demande: <strong>' + escapeHtml(nData.demandeTitre || '') + '</strong>';
                         break;
                     default:
                         icon = 'bell';
@@ -445,7 +539,7 @@ async function loadNotifications() {
                         text = 'Nouvelle notification';
                 }
                 
-                return '<div class="notification-item unread" onclick="handleNotificationClick(\'' + (n._id || n.id) + '\', \'' + n.type + '\', \'' + encodeURIComponent(JSON.stringify(n.data || {})) + '\')">' +
+                return '<div class="notification-item unread" onclick="handleNotificationClick(\'' + (n._id || n.id) + '\', \'' + n.type + '\', ' + JSON.stringify(nData).replace(/"/g, '&quot;') + ')">' +
                     '<div class="notification-icon ' + iconClass + '"><i class="fas fa-' + icon + '"></i></div>' +
                     '<div class="notification-content">' +
                         '<div class="notification-text">' + text + '</div>' +
@@ -459,25 +553,20 @@ async function loadNotifications() {
     }
 }
 
-async function handleNotificationClick(notificationId, type, encodedData) {
+async function handleNotificationClick(notificationId, type, data) {
     closeNotifications();
     
-    let data = {};
-    try {
-        data = JSON.parse(decodeURIComponent(encodedData));
-    } catch(e) {}
-    
-    // Marquer comme lu
+    // Mark as read
     try {
         await apiCall('/notifications/' + notificationId + '/read', { method: 'PUT' });
     } catch(e) {}
     
-    // Redirection
-    if (type === 'message' && data.senderId && data.senderNom) {
+    // Redirect based on type
+    if (type === 'message' && data && data.senderId && data.senderNom) {
         startConversation(data.senderId, data.senderNom, data.demandeId || '', data.demandeTitre || 'Conversation');
-    } else if (type === 'reponse' && data.demandeId) {
+    } else if (type === 'reponse' && data && data.demandeId) {
         showDemandeDetail(data.demandeId);
-    } else if (type === 'nouvelle_demande' && data.demandeId) {
+    } else if (type === 'nouvelle_demande' && data && data.demandeId) {
         showDemandeDetail(data.demandeId);
     } else {
         showSection('home');
@@ -500,7 +589,7 @@ async function markAllAsRead() {
 
 function startPolling() {
     stopPolling();
-    state.notificationPolling = setInterval(() => {
+    state.notificationPolling = setInterval(function() {
         if (state.user) loadNotifications();
     }, 5000);
 }
@@ -517,12 +606,12 @@ function stopPolling() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         📊 STATS
+//                         STATS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function loadStats() {
     try {
-        const stats = await apiCall('/stats');
+        var stats = await apiCall('/stats');
         document.getElementById('statUsers').textContent = stats.totalUsers || 0;
         document.getElementById('statDemandes').textContent = stats.totalDemandes || 0;
         document.getElementById('statReponses').textContent = stats.totalReponses || 0;
@@ -532,18 +621,57 @@ async function loadStats() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         📋 DEMANDES
+//                         DEMANDES
 // ═══════════════════════════════════════════════════════════════════════════════
+
+async function loadTopAnnonces() {
+    try {
+        var demandes = await apiCall('/demandes');
+        var carousel = document.getElementById('topAnnoncesCarousel');
+        
+        if (!demandes || demandes.length === 0) {
+            document.getElementById('topAnnoncesSection').style.display = 'none';
+            return;
+        }
+        
+        // Show first 6 as "top"
+        var topDemandes = demandes.slice(0, 6);
+        
+        carousel.innerHTML = topDemandes.map(function(d) {
+            var imageUrl = '';
+            if (d.images && d.images.length > 0) {
+                imageUrl = getImageUrl(d.images[0]);
+            }
+            
+            return '<div class="top-annonce-card" onclick="showDemandeDetail(\'' + (d._id || d.id) + '\')">' +
+                '<div class="top-annonce-image">' +
+                    (imageUrl 
+                        ? '<img src="' + imageUrl + '" alt="' + escapeHtml(d.titre) + '" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f3f4f6%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%239ca3af%22 font-size=%2230%22>📷</text></svg>\'">'
+                        : '<img src="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f3f4f6%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%239ca3af%22 font-size=%2230%22>📷</text></svg>">'
+                    ) +
+                '</div>' +
+                '<div class="top-annonce-body">' +
+                    '<div class="top-annonce-title">' + escapeHtml(d.titre) + '</div>' +
+                    '<div class="top-annonce-price">' + formatPrice(d.budget) + '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    } catch (error) {
+        console.error('Error loading top annonces:', error);
+    }
+}
 
 async function loadRecentDemandes() {
     try {
-        const demandes = await apiCall('/demandes');
-        const container = document.getElementById('recentDemandes');
+        var demandes = await apiCall('/demandes');
+        var container = document.getElementById('recentDemandes');
         
         if (!demandes || demandes.length === 0) {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>Aucune demande</h3><p>Soyez le premier à publier !</p><button class="btn btn-primary" onclick="handlePublishClick()"><i class="fas fa-plus"></i> Publier</button></div>';
         } else {
-            container.innerHTML = demandes.slice(0, 6).map(d => createDemandeCard(d)).join('');
+            container.innerHTML = demandes.slice(0, 6).map(function(d) {
+                return createDemandeCard(d);
+            }).join('');
         }
     } catch (error) {
         document.getElementById('recentDemandes').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Erreur</h3><p>Impossible de charger les demandes</p></div>';
@@ -552,22 +680,24 @@ async function loadRecentDemandes() {
 
 async function loadDemandes() {
     try {
-        const search = document.getElementById('searchInput').value;
-        const categorie = document.getElementById('categoryFilter').value;
+        var search = document.getElementById('searchInput').value;
+        var categorie = document.getElementById('categoryFilter').value;
         
-        let url = '/demandes?';
+        var url = '/demandes?';
         if (search) url += 'search=' + encodeURIComponent(search) + '&';
         if (categorie) url += 'categorie=' + encodeURIComponent(categorie);
         
-        const demandes = await apiCall(url);
+        var demandes = await apiCall(url);
         state.demandes = demandes;
         
-        const grid = document.getElementById('demandesGrid');
+        var grid = document.getElementById('demandesGrid');
         
         if (!demandes || demandes.length === 0) {
             grid.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><h3>Aucune demande</h3><p>Modifiez vos critères de recherche</p></div>';
         } else {
-            grid.innerHTML = demandes.map(d => createDemandeCard(d)).join('');
+            grid.innerHTML = demandes.map(function(d) {
+                return createDemandeCard(d);
+            }).join('');
         }
     } catch (error) {
         showToast('Erreur de chargement', 'error');
@@ -579,19 +709,31 @@ function filterDemandes() {
 }
 
 function createDemandeCard(demande) {
-    let imageUrl = '';
+    var imageUrl = '';
     if (demande.images && demande.images.length > 0) {
         imageUrl = getImageUrl(demande.images[0]);
     }
     
-    const imageHtml = imageUrl 
-        ? '<div class="card-image-container"><img src="' + imageUrl + '" class="card-image" alt="' + escapeHtml(demande.titre) + '" onerror="this.parentElement.innerHTML=\'<div class=card-no-image><i class=fas fa-image></i><span>Image non disponible</span></div>\'"></div>'
-        : '<div class="card-image-container"><div class="card-no-image"><i class="fas fa-image"></i><span>Pas d\'image</span></div></div>';
+    var badge = demande.badge || '';
+    var badgeHtml = '';
+    
+    if (badge === 'new') {
+        badgeHtml = '<span class="card-badge badge-new"><i class="fas fa-sparkles"></i> Nouveau</span>';
+    } else if (badge === 'urgent') {
+        badgeHtml = '<span class="card-badge badge-urgent"><i class="fas fa-bolt"></i> Urgent</span>';
+    } else if (badge === 'top') {
+        badgeHtml = '<span class="card-badge badge-top"><i class="fas fa-star"></i> Top</span>';
+    } else if (badge === 'sponsored') {
+        badgeHtml = '<span class="card-badge badge-sponsored"><i class="fas fa-ad"></i> Sponsorisé</span>';
+    }
+    
+    var imageHtml = imageUrl 
+        ? '<div class="card-image-container"><div class="card-badges">' + badgeHtml + '<span class="card-badge badge-category">' + escapeHtml(demande.categorie) + '</span></div><img src="' + imageUrl + '" class="card-image" alt="' + escapeHtml(demande.titre) + '" onerror="this.parentElement.innerHTML=\'<div class=card-no-image><i class=fas fa-image></i><span>Image non disponible</span></div>\'"></div>'
+        : '<div class="card-image-container"><div class="card-badges">' + badgeHtml + '<span class="card-badge badge-category">' + escapeHtml(demande.categorie) + '</span></div><div class="card-no-image"><i class="fas fa-image"></i><span>Pas d\'image</span></div></div>';
     
     return '<div class="card" onclick="showDemandeDetail(\'' + (demande._id || demande.id) + '\')">' +
         imageHtml +
         '<div class="card-body">' +
-            '<span class="card-badge">' + escapeHtml(demande.categorie) + '</span>' +
             '<h3 class="card-title">' + escapeHtml(demande.titre) + '</h3>' +
             '<p class="card-description">' + escapeHtml(demande.description) + '</p>' +
             '<div class="card-price">' + formatPrice(demande.budget) + '</div>' +
@@ -605,26 +747,26 @@ function createDemandeCard(demande) {
 
 async function showDemandeDetail(demandeId) {
     try {
-        const demande = await apiCall('/demandes/' + demandeId);
+        var demande = await apiCall('/demandes/' + demandeId);
         state.currentDemande = demande;
         
-        const container = document.getElementById('detailContainer');
+        var container = document.getElementById('detailContainer');
         
         // Images
-        let imageUrl = '';
+        var imageUrl = '';
         if (demande.images && demande.images.length > 0) {
             imageUrl = getImageUrl(demande.images[0]);
         }
         
-        let imagesHtml = '';
+        var imagesHtml = '';
         if (imageUrl) {
             imagesHtml = '<div class="detail-images">' +
                 '<img src="' + imageUrl + '" class="detail-main-image" onclick="openLightbox(\'' + imageUrl + '\')" onerror="this.style.display=\'none\'">';
             
             if (demande.images.length > 1) {
                 imagesHtml += '<div class="detail-thumbnails">' +
-                    demande.images.map((img, i) => {
-                        const url = getImageUrl(img);
+                    demande.images.map(function(img, i) {
+                        var url = getImageUrl(img);
                         return '<img src="' + url + '" class="detail-thumbnail ' + (i === 0 ? 'active' : '') + '" onclick="changeDetailImage(\'' + url + '\', this)" onerror="this.style.display=\'none\'">';
                     }).join('') +
                 '</div>';
@@ -632,12 +774,12 @@ async function showDemandeDetail(demandeId) {
             imagesHtml += '</div>';
         }
         
-        const acheteurId = demande.acheteurId?._id || demande.acheteurId;
-        const acheteurNom = demande.acheteurId?.nom || demande.acheteurNom || 'Inconnu';
-        const userId = state.user?._id || state.user?.id;
+        var acheteurId = demande.acheteurId && demande.acheteurId._id ? demande.acheteurId._id : demande.acheteurId;
+        var acheteurNom = demande.acheteurId && demande.acheteurId.nom ? demande.acheteurId.nom : (demande.acheteurNom || 'Inconnu');
+        var userId = state.user ? (state.user._id || state.user.id) : null;
         
         // Actions
-        let actionsHtml = '';
+        var actionsHtml = '';
         if (state.user) {
             if (state.user.role === 'vendeur' && acheteurId !== userId) {
                 actionsHtml = '<div class="detail-actions">' +
@@ -664,32 +806,32 @@ async function showDemandeDetail(demandeId) {
                     '<div class="detail-meta-item"><i class="fas fa-user"></i><span>' + escapeHtml(acheteurNom) + '</span></div>' +
                     '<div class="detail-meta-item"><i class="fas fa-map-marker-alt"></i><span>' + escapeHtml(demande.localisation || 'Non spécifié') + '</span></div>' +
                     '<div class="detail-meta-item"><i class="fas fa-clock"></i><span>' + formatDate(demande.dateCreation) + '</span></div>' +
-                    '<div class="detail-meta-item"><i class="fas fa-comments"></i><span>' + (demande.reponses?.length || 0) + ' réponse(s)</span></div>' +
+                    '<div class="detail-meta-item"><i class="fas fa-comments"></i><span>' + (demande.reponses ? demande.reponses.length : 0) + ' réponse(s)</span></div>' +
                 '</div>' +
                 '<p class="detail-description">' + escapeHtml(demande.description) + '</p>' +
                 actionsHtml +
             '</div>';
         
-        // Réponses
-        const reponses = demande.reponses || [];
-        const responsesSection = document.getElementById('responsesSection');
-        const responsesList = document.getElementById('responsesList');
-        const responseCount = document.getElementById('responseCount');
+        // Responses
+        var reponses = demande.reponses || [];
+        var responsesSection = document.getElementById('responsesSection');
+        var responsesList = document.getElementById('responsesList');
+        var responseCount = document.getElementById('responseCount');
         
         if (state.user && userId === acheteurId && reponses.length > 0) {
             responsesSection.style.display = 'block';
             responseCount.textContent = reponses.length;
             
-            responsesList.innerHTML = reponses.map(r => {
-                const vendeurId = r.vendeurId?._id || r.vendeurId;
-                const vendeurNom = r.vendeurId?.nom || r.vendeurNom || 'Inconnu';
+            responsesList.innerHTML = reponses.map(function(r) {
+                var vendeurId = r.vendeurId && r.vendeurId._id ? r.vendeurId._id : r.vendeurId;
+                var vendeurNom = r.vendeurId && r.vendeurId.nom ? r.vendeurId.nom : (r.vendeurNom || 'Inconnu');
                 
-                let responseImagesHtml = '';
+                var responseImagesHtml = '';
                 if (r.images && r.images.length > 0) {
                     responseImagesHtml = '<div class="response-images">' +
-                        r.images.map(img => {
-                            const url = getImageUrl(img);
-                            return '<img src="' + url + '" onclick="openLightbox(\'' + url + '\')" onerror="this.style.display=\'none\'">';
+                        r.images.map(function(img) {
+                            var url = getImageUrl(img);
+                            return url ? '<img src="' + url + '" onclick="openLightbox(\'' + url + '\')" onerror="this.style.display=\'none\'">' : '';
                         }).join('') +
                     '</div>';
                 }
@@ -726,7 +868,9 @@ async function showDemandeDetail(demandeId) {
 
 function changeDetailImage(src, thumbnail) {
     document.querySelector('.detail-main-image').src = src;
-    document.querySelectorAll('.detail-thumbnail').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.detail-thumbnail').forEach(function(t) {
+        t.classList.remove('active');
+    });
     thumbnail.classList.add('active');
 }
 
@@ -738,13 +882,13 @@ async function submitDemande(e) {
         return;
     }
     
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
+    var submitBtn = document.getElementById('publishBtn');
+    var originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publication...';
     submitBtn.disabled = true;
     
     try {
-        const data = {
+        var data = {
             titre: document.getElementById('demandeTitle').value.trim(),
             categorie: document.getElementById('demandeCategory').value,
             budget: parseFloat(document.getElementById('demandeBudget').value),
@@ -766,6 +910,7 @@ async function submitDemande(e) {
         
         loadStats();
         loadRecentDemandes();
+        loadTopAnnonces();
         showSection('demandes');
         
     } catch (error) {
@@ -784,6 +929,7 @@ async function deleteDemande(demandeId) {
         showToast('Demande supprimée', 'success');
         loadStats();
         loadRecentDemandes();
+        loadTopAnnonces();
         showSection('demandes');
     } catch (error) {
         showToast(error.message, 'error');
@@ -791,7 +937,7 @@ async function deleteDemande(demandeId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         💬 RÉPONSES
+//                         RESPONSES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function openResponseModal(demandeId) {
@@ -814,8 +960,8 @@ function closeResponseModal() {
 async function submitResponse(e) {
     e.preventDefault();
     
-    const demandeId = document.getElementById('responseDemandeId').value;
-    const message = document.getElementById('responseMessage').value;
+    var demandeId = document.getElementById('responseDemandeId').value;
+    var message = document.getElementById('responseMessage').value;
     
     try {
         await apiCall('/demandes/' + demandeId + '/reponses', {
@@ -836,24 +982,24 @@ async function submitResponse(e) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         ✉️ MESSAGERIE
+//                         MESSAGING
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function loadConversations() {
     if (!state.user) return;
     
-    const userId = state.user._id || state.user.id;
+    var userId = state.user._id || state.user.id;
     
     try {
-        const conversations = await apiCall('/conversations/' + userId);
+        var conversations = await apiCall('/conversations/' + userId);
         state.conversations = conversations;
         
-        const container = document.getElementById('conversationsList');
+        var container = document.getElementById('conversationsList');
         
         if (!conversations || conversations.length === 0) {
-            container.innerHTML = '<div class="notification-empty"><i class="fas fa-comments"></i><p>Aucune conversation</p></div>';
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-comments"></i><p>Aucune conversation</p></div>';
         } else {
-            container.innerHTML = conversations.map(c => {
+            container.innerHTML = conversations.map(function(c) {
                 return '<div class="conversation-item" onclick="openChatFromConversation(\'' + c.conversationId + '\', \'' + c.interlocuteurId + '\', \'' + escapeHtml(c.interlocuteurNom) + '\', \'' + (c.demandeId || '') + '\', \'' + escapeHtml(c.demandeTitre || 'Conversation') + '\')">' +
                     '<div class="conversation-top">' +
                         '<span class="conversation-product">' + escapeHtml(c.demandeTitre || 'Conversation') + '</span>' +
@@ -878,9 +1024,9 @@ function startConversation(userId, userName, demandeId, demandeTitre) {
         return;
     }
     
-    const currentUserId = state.user._id || state.user.id;
-    const ids = [currentUserId, userId].sort();
-    const conversationId = 'demande_' + demandeId + '_users_' + ids[0] + '_' + ids[1];
+    var currentUserId = state.user._id || state.user.id;
+    var ids = [currentUserId, userId].sort();
+    var conversationId = 'demande_' + (demandeId || 'direct') + '_users_' + ids[0] + '_' + ids[1];
     
     openChat(conversationId, userId, userName, demandeId, demandeTitre);
 }
@@ -891,11 +1037,11 @@ function openChatFromConversation(conversationId, userId, userName, demandeId, d
 
 async function openChat(conversationId, userId, userName, demandeId, demandeTitre) {
     state.currentConversation = {
-        conversationId,
-        userId,
-        userName,
-        demandeId,
-        demandeTitre
+        conversationId: conversationId,
+        userId: userId,
+        userName: userName,
+        demandeId: demandeId,
+        demandeTitre: demandeTitre
     };
     
     document.getElementById('chatAvatar').textContent = getInitials(userName);
@@ -904,6 +1050,7 @@ async function openChat(conversationId, userId, userName, demandeId, demandeTitr
     
     state.chatImages = [];
     updateChatImagePreview();
+    document.getElementById('chatInput').value = '';
     
     await loadMessages(conversationId);
     
@@ -915,23 +1062,23 @@ async function openChat(conversationId, userId, userName, demandeId, demandeTitr
 
 async function loadMessages(conversationId) {
     try {
-        const messages = await apiCall('/messages/' + encodeURIComponent(conversationId));
-        const container = document.getElementById('chatMessages');
+        var messages = await apiCall('/messages/' + encodeURIComponent(conversationId));
+        var container = document.getElementById('chatMessages');
         
-        const userId = state.user._id || state.user.id;
+        var userId = state.user._id || state.user.id;
         
         if (!messages || messages.length === 0) {
             container.innerHTML = '<div class="chat-empty"><i class="fas fa-comments"></i><p>Démarrez la conversation</p></div>';
         } else {
-            container.innerHTML = messages.map(m => {
-                const senderId = m.senderId?._id || m.senderId;
-                const isSent = senderId === userId;
+            container.innerHTML = messages.map(function(m) {
+                var senderId = m.senderId && m.senderId._id ? m.senderId._id : m.senderId;
+                var isSent = senderId === userId;
                 
-                let imagesHtml = '';
+                var imagesHtml = '';
                 if (m.images && m.images.length > 0) {
                     imagesHtml = '<div class="message-images">' +
-                        m.images.map(img => {
-                            const url = getImageUrl(img);
+                        m.images.map(function(img) {
+                            var url = getImageUrl(img);
                             return url ? '<img src="' + url + '" onclick="openLightbox(\'' + url + '\')" onerror="this.style.display=\'none\'">' : '';
                         }).join('') +
                     '</div>';
@@ -963,12 +1110,12 @@ function closeChat() {
 async function sendMessage() {
     if (!state.currentConversation) return;
     
-    const input = document.getElementById('chatInput');
-    const message = input.value.trim();
+    var input = document.getElementById('chatInput');
+    var message = input.value.trim();
     
     if (!message && state.chatImages.length === 0) return;
     
-    const conv = state.currentConversation;
+    var conv = state.currentConversation;
     
     try {
         await apiCall('/messages', {
@@ -989,10 +1136,6 @@ async function sendMessage() {
         
         await loadMessages(conv.conversationId);
         
-        if (state.chatImages.length > 0) {
-            showToast('Message envoyé avec image !', 'success');
-        }
-        
     } catch (error) {
         showToast('Erreur d\'envoi', 'error');
     }
@@ -1007,7 +1150,7 @@ function handleChatKeydown(e) {
 
 function startMessagePolling(conversationId) {
     stopMessagePolling();
-    state.messagePolling = setInterval(() => {
+    state.messagePolling = setInterval(function() {
         if (state.currentConversation && state.currentConversation.conversationId === conversationId) {
             loadMessages(conversationId);
         }
@@ -1022,7 +1165,7 @@ function stopMessagePolling() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         📷 IMAGES
+//                         IMAGES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function handleDemandeImages(e) {
@@ -1038,9 +1181,9 @@ function handleChatImages(e) {
 }
 
 function processImages(files, type) {
-    const maxSize = 5 * 1024 * 1024;
+    var maxSize = 5 * 1024 * 1024;
     
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach(function(file) {
         if (!file.type.startsWith('image/')) {
             showToast('Format non supporté', 'warning');
             return;
@@ -1051,9 +1194,9 @@ function processImages(files, type) {
             return;
         }
         
-        const reader = new FileReader();
-        reader.onload = e => {
-            const base64 = e.target.result;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var base64 = e.target.result;
             
             if (type === 'demande') {
                 state.demandeImages.push(base64);
@@ -1071,8 +1214,8 @@ function processImages(files, type) {
 }
 
 function updateImagePreview(containerId, images, type) {
-    const container = document.getElementById(containerId);
-    container.innerHTML = images.map((img, i) => {
+    var container = document.getElementById(containerId);
+    container.innerHTML = images.map(function(img, i) {
         return '<div class="image-preview-item">' +
             '<img src="' + img + '">' +
             '<button class="image-preview-remove" onclick="removeImage(\'' + type + '\', ' + i + ')"><i class="fas fa-times"></i></button>' +
@@ -1081,8 +1224,8 @@ function updateImagePreview(containerId, images, type) {
 }
 
 function updateChatImagePreview() {
-    const container = document.getElementById('chatImagePreview');
-    container.innerHTML = state.chatImages.map((img, i) => {
+    var container = document.getElementById('chatImagePreview');
+    container.innerHTML = state.chatImages.map(function(img, i) {
         return '<div class="chat-image-preview-item">' +
             '<img src="' + img + '">' +
             '<button class="remove-btn" onclick="removeChatImage(' + i + ')"><i class="fas fa-times"></i></button>' +
@@ -1106,7 +1249,7 @@ function removeChatImage(index) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         🖼️ LIGHTBOX
+//                         LIGHTBOX
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function openLightbox(src) {
@@ -1119,25 +1262,25 @@ function closeLightbox() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         👤 ESPACE UTILISATEUR
+//                         USER SPACE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function setupEspaceUtilisateur() {
     if (!state.user) return;
     
-    const tabsContainer = document.getElementById('espaceTabs');
-    const subtitle = document.getElementById('espaceSubtitle');
+    var tabsContainer = document.getElementById('espaceTabs');
+    var subtitle = document.getElementById('espaceSubtitle');
     
     if (state.user.role === 'acheteur') {
         subtitle.textContent = 'Gérez vos demandes';
         tabsContainer.innerHTML = 
             '<button class="user-tab active" onclick="loadEspaceTab(\'mes-demandes\', this)">Mes demandes</button>' +
-            '<button class="user-tab" onclick="loadEspaceTab(\'reponses-recues\', this)">Réponses reçues</button>';
+            '<button class="user-tab" onclick="loadEspaceTab(\'reponses-recues\', this)">Réponses</button>';
         loadEspaceTabDirect('mes-demandes');
     } else if (state.user.role === 'vendeur') {
         subtitle.textContent = 'Consultez les demandes disponibles';
         tabsContainer.innerHTML = 
-            '<button class="user-tab active" onclick="loadEspaceTab(\'demandes-disponibles\', this)">Demandes dispo</button>' +
+            '<button class="user-tab active" onclick="loadEspaceTab(\'demandes-disponibles\', this)">Demandes</button>' +
             '<button class="user-tab" onclick="loadEspaceTab(\'mes-reponses\', this)">Mes réponses</button>';
         loadEspaceTabDirect('demandes-disponibles');
     } else {
@@ -1146,36 +1289,42 @@ function setupEspaceUtilisateur() {
 }
 
 function loadEspaceTab(tab, element) {
-    document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.user-tab').forEach(function(t) {
+        t.classList.remove('active');
+    });
     element.classList.add('active');
     loadEspaceTabDirect(tab);
 }
 
 async function loadEspaceTabDirect(tab) {
-    const content = document.getElementById('espaceContent');
+    var content = document.getElementById('espaceContent');
     content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     
-    const userId = state.user._id || state.user.id;
+    var userId = state.user._id || state.user.id;
     
     try {
         if (tab === 'mes-demandes') {
-            const demandes = await apiCall('/demandes?acheteurId=' + userId);
+            var demandes = await apiCall('/demandes?acheteurId=' + userId);
             
             if (!demandes || demandes.length === 0) {
                 content.innerHTML = '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>Aucune demande</h3><button class="btn btn-primary" onclick="showSection(\'publish\')"><i class="fas fa-plus"></i> Publier</button></div>';
             } else {
-                content.innerHTML = '<div class="demandes-grid">' + demandes.map(d => createDemandeCard(d)).join('') + '</div>';
+                content.innerHTML = '<div class="demandes-grid">' + demandes.map(function(d) { return createDemandeCard(d); }).join('') + '</div>';
             }
             
         } else if (tab === 'reponses-recues') {
-            const demandes = await apiCall('/demandes?acheteurId=' + userId);
-            let allReponses = [];
+            var demandes = await apiCall('/demandes?acheteurId=' + userId);
+            var allReponses = [];
             
             if (demandes) {
-                demandes.forEach(d => {
+                demandes.forEach(function(d) {
                     if (d.reponses) {
-                        d.reponses.forEach(r => {
-                            allReponses.push({ ...r, demandeTitre: d.titre, demandeId: d._id || d.id });
+                        d.reponses.forEach(function(r) {
+                            allReponses.push({ 
+                                ...r, 
+                                demandeTitre: d.titre, 
+                                demandeId: d._id || d.id 
+                            });
                         });
                     }
                 });
@@ -1184,9 +1333,9 @@ async function loadEspaceTabDirect(tab) {
             if (allReponses.length === 0) {
                 content.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>Aucune réponse</h3><p>Vous n\'avez pas encore reçu de réponse</p></div>';
             } else {
-                content.innerHTML = allReponses.map(r => {
-                    const vendeurNom = r.vendeurId?.nom || r.vendeurNom || 'Inconnu';
-                    const vendeurId = r.vendeurId?._id || r.vendeurId;
+                content.innerHTML = allReponses.map(function(r) {
+                    var vendeurNom = r.vendeurId && r.vendeurId.nom ? r.vendeurId.nom : (r.vendeurNom || 'Inconnu');
+                    var vendeurId = r.vendeurId && r.vendeurId._id ? r.vendeurId._id : r.vendeurId;
                     
                     return '<div class="response-card">' +
                         '<div class="response-header">' +
@@ -1197,7 +1346,7 @@ async function loadEspaceTabDirect(tab) {
                                     '<span>' + formatDate(r.dateCreation) + '</span>' +
                                 '</div>' +
                             '</div>' +
-                            '<span class="card-badge">' + escapeHtml(r.demandeTitre) + '</span>' +
+                            '<span class="card-badge badge-category">' + escapeHtml(r.demandeTitre) + '</span>' +
                         '</div>' +
                         '<p class="response-message">' + escapeHtml(r.message) + '</p>' +
                         '<div class="response-actions">' +
@@ -1210,25 +1359,25 @@ async function loadEspaceTabDirect(tab) {
             }
             
         } else if (tab === 'demandes-disponibles') {
-            const demandes = await apiCall('/demandes');
+            var demandes = await apiCall('/demandes');
             
             if (!demandes || demandes.length === 0) {
                 content.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><h3>Aucune demande</h3></div>';
             } else {
-                content.innerHTML = '<div class="demandes-grid">' + demandes.map(d => createDemandeCard(d)).join('') + '</div>';
+                content.innerHTML = '<div class="demandes-grid">' + demandes.map(function(d) { return createDemandeCard(d); }).join('') + '</div>';
             }
             
         } else if (tab === 'mes-reponses') {
-            const reponses = await apiCall('/reponses?vendeurId=' + userId);
+            var reponses = await apiCall('/reponses?vendeurId=' + userId);
             
             if (!reponses || reponses.length === 0) {
                 content.innerHTML = '<div class="empty-state"><i class="fas fa-reply"></i><h3>Aucune réponse</h3><button class="btn btn-primary" onclick="showSection(\'demandes\')"><i class="fas fa-search"></i> Parcourir</button></div>';
             } else {
-                content.innerHTML = reponses.map(r => {
-                    const demandeId = r.demandeId?._id || r.demandeId;
+                content.innerHTML = reponses.map(function(r) {
+                    var demandeId = r.demandeId && r.demandeId._id ? r.demandeId._id : r.demandeId;
                     return '<div class="card" onclick="showDemandeDetail(\'' + demandeId + '\')">' +
                         '<div class="card-body">' +
-                            '<span class="card-badge">' + escapeHtml(r.demandeTitre || 'Demande') + '</span>' +
+                            '<span class="card-badge badge-category">' + escapeHtml(r.demandeTitre || 'Demande') + '</span>' +
                             '<p class="card-description">' + escapeHtml(r.message) + '</p>' +
                             '<div class="card-footer"><span>' + formatDate(r.dateCreation) + '</span></div>' +
                         '</div>' +
@@ -1242,7 +1391,7 @@ async function loadEspaceTabDirect(tab) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         🛡️ ADMIN
+//                         ADMIN
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function loadAdminDashboard() {
@@ -1250,15 +1399,17 @@ async function loadAdminDashboard() {
 }
 
 async function loadAdminTab(tab, element) {
-    document.querySelectorAll('.admin-nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.admin-nav-item').forEach(function(i) {
+        i.classList.remove('active');
+    });
     if (element) element.classList.add('active');
     
-    const content = document.getElementById('adminContent');
+    var content = document.getElementById('adminContent');
     content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     
     try {
         if (tab === 'dashboard') {
-            const stats = await apiCall('/admin/stats');
+            var stats = await apiCall('/admin/stats');
             
             content.innerHTML = 
                 '<div class="section-header"><h2 class="section-title">Dashboard</h2></div>' +
@@ -1270,11 +1421,11 @@ async function loadAdminTab(tab, element) {
                 '</div>';
                 
         } else if (tab === 'users') {
-            const users = await apiCall('/admin/users');
+            var users = await apiCall('/admin/users');
             
             content.innerHTML = '<div class="section-header"><h2 class="section-title">Utilisateurs (' + users.length + ')</h2></div>' +
-                users.map(u => {
-                    const uId = u._id || u.id;
+                users.map(function(u) {
+                    var uId = u._id || u.id;
                     return '<div class="admin-card">' +
                         '<div class="admin-card-header">' +
                             '<div class="admin-card-avatar">' + getInitials(u.nom) + '</div>' +
@@ -1295,33 +1446,62 @@ async function loadAdminTab(tab, element) {
                 }).join('');
                 
         } else if (tab === 'posts') {
-            const posts = await apiCall('/admin/posts');
+            var posts = await apiCall('/admin/posts');
             
             content.innerHTML = '<div class="section-header"><h2 class="section-title">Publications (' + posts.length + ')</h2></div>' +
-                posts.map(p => {
-                    const pId = p._id || p.id;
-                    const authorId = p.acheteurId?._id || p.acheteurId;
+                posts.map(function(p) {
+                    var pId = p._id || p.id;
                     return '<div class="admin-card">' +
                         '<div class="admin-card-header">' +
-                            '<div class="admin-card-info"><h4>' + escapeHtml(p.titre) + '</h4><span>' + escapeHtml(p.acheteurId?.nom || 'Inconnu') + ' • ' + formatDate(p.dateCreation) + '</span></div>' +
+                            '<div class="admin-card-info"><h4>' + escapeHtml(p.titre) + '</h4><span>' + escapeHtml(p.acheteurId && p.acheteurId.nom ? p.acheteurId.nom : 'Inconnu') + ' • ' + formatDate(p.dateCreation) + '</span></div>' +
                         '</div>' +
                         '<div class="admin-card-meta">' +
                             '<span class="status-badge pending">' + escapeHtml(p.categorie) + '</span>' +
                             '<span style="font-weight:700;color:var(--primary);">' + formatPrice(p.budget) + '</span>' +
                         '</div>' +
                         '<div class="admin-card-actions">' +
-                            '<button class="action-btn view" onclick="showDemandeDetail(\'' + pId + '\')"><i class="fas fa-eye"></i> Voir</button>' +
-                            '<button class="action-btn delete" onclick="adminDeletePost(\'' + pId + '\', \'' + authorId + '\')"><i class="fas fa-trash"></i> Suppr.</button>' +
+                            '<button class="action-btn view" onclick="showDemandeDetail(\'' + pId + '\')"><i class="fas fa-eye"></i></button>' +
+                            '<button class="action-btn delete" onclick="adminDeletePost(\'' + pId + '\')"><i class="fas fa-trash"></i> Suppr.</button>' +
                         '</div>' +
                     '</div>';
                 }).join('');
                 
+        } else if (tab === 'sliders') {
+            content.innerHTML = '<div class="section-header"><h2 class="section-title">Gestion des Sliders</h2></div>' +
+                '<button class="btn btn-primary" onclick="addSlider()" style="margin-bottom:20px;"><i class="fas fa-plus"></i> Ajouter un slide</button>' +
+                '<div id="slidersList"><div class="loading"><div class="spinner"></div></div></div>';
+            loadSliders();
+            
+        } else if (tab === 'customize') {
+            content.innerHTML = '<div class="section-header"><h2 class="section-title">Personnaliser le site</h2></div>' +
+                '<div class="publish-card">' +
+                    '<form id="customizeForm" onsubmit="saveCustomization(event)">' +
+                        '<div class="form-group">' +
+                            '<label class="form-label">Couleur principale</label>' +
+                            '<input type="color" class="form-input" id="primaryColor" value="#FF6B00" style="height:50px;padding:5px;">' +
+                        '</div>' +
+                        '<div class="form-group">' +
+                            '<label class="form-label">Texte Hero</label>' +
+                            '<input type="text" class="form-input" id="heroText" placeholder="Titre principal">' +
+                        '</div>' +
+                        '<div class="form-group">' +
+                            '<label class="form-label">Sous-titre Hero</label>' +
+                            '<textarea class="form-textarea" id="heroSubtext" placeholder="Description"></textarea>' +
+                        '</div>' +
+                        '<div class="form-group">' +
+                            '<label class="form-label">Texte bouton CTA</label>' +
+                            '<input type="text" class="form-input" id="ctaText" placeholder="Publier une demande">' +
+                        '</div>' +
+                        '<button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Sauvegarder</button>' +
+                    '</form>' +
+                '</div>';
+                
         } else if (tab === 'social') {
-            const links = await apiCall('/admin/social-links');
+            var links = await apiCall('/admin/social-links').catch(function() { return []; });
             
             content.innerHTML = '<div class="section-header"><h2 class="section-title">Réseaux sociaux</h2></div>' +
                 '<button class="btn btn-primary" onclick="addSocialLink()" style="margin-bottom:20px;"><i class="fas fa-plus"></i> Ajouter</button>' +
-                (links && links.length > 0 ? links.map(l => {
+                (links && links.length > 0 ? links.map(function(l) {
                     return '<div class="admin-card">' +
                         '<div class="admin-card-header">' +
                             '<div class="admin-card-avatar"><i class="' + (l.icon || 'fas fa-link') + '"></i></div>' +
@@ -1338,14 +1518,107 @@ async function loadAdminTab(tab, element) {
     }
 }
 
-async function adminDeletePost(postId, authorId) {
-    const reason = prompt('Raison de la suppression:');
+async function loadSliders() {
+    try {
+        var sliders = await apiCall('/admin/sliders').catch(function() { return []; });
+        var container = document.getElementById('slidersList');
+        
+        if (!sliders || sliders.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-images"></i><p>Aucun slider</p></div>';
+        } else {
+            container.innerHTML = sliders.map(function(s) {
+                return '<div class="admin-card">' +
+                    '<div class="admin-card-header">' +
+                        '<img src="' + getImageUrl(s.image) + '" style="width:80px;height:50px;object-fit:cover;border-radius:8px;" onerror="this.style.display=\'none\'">' +
+                        '<div class="admin-card-info"><h4>' + escapeHtml(s.title || 'Sans titre') + '</h4><span>' + (s.isActive ? '✅ Actif' : '❌ Inactif') + '</span></div>' +
+                    '</div>' +
+                    '<div class="admin-card-actions">' +
+                        '<button class="action-btn ' + (s.isActive ? 'ban' : 'unban') + '" onclick="toggleSlider(\'' + (s._id || s.id) + '\', ' + !s.isActive + ')">' +
+                            '<i class="fas fa-' + (s.isActive ? 'eye-slash' : 'eye') + '"></i>' +
+                        '</button>' +
+                        '<button class="action-btn delete" onclick="deleteSlider(\'' + (s._id || s.id) + '\')"><i class="fas fa-trash"></i></button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+    } catch (error) {
+        console.error('Error loading sliders:', error);
+    }
+}
+
+function addSlider() {
+    var title = prompt('Titre du slide:');
+    if (!title) return;
+    
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        
+        var reader = new FileReader();
+        reader.onload = async function(ev) {
+            try {
+                await apiCall('/admin/sliders', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        title: title,
+                        image: ev.target.result,
+                        isActive: true
+                    })
+                });
+                showToast('Slider ajouté', 'success');
+                loadSliders();
+                loadHeroSliders();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+async function toggleSlider(sliderId, isActive) {
+    try {
+        await apiCall('/admin/sliders/' + sliderId, {
+            method: 'PUT',
+            body: JSON.stringify({ isActive: isActive })
+        });
+        loadSliders();
+        loadHeroSliders();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function deleteSlider(sliderId) {
+    if (!confirm('Supprimer ce slider ?')) return;
+    
+    try {
+        await apiCall('/admin/sliders/' + sliderId, { method: 'DELETE' });
+        showToast('Slider supprimé', 'success');
+        loadSliders();
+        loadHeroSliders();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function saveCustomization(e) {
+    e.preventDefault();
+    showToast('Personnalisation sauvegardée !', 'success');
+}
+
+async function adminDeletePost(postId) {
+    var reason = prompt('Raison de la suppression:');
     if (!reason) return;
     
     try {
         await apiCall('/admin/posts/' + postId, {
             method: 'DELETE',
-            body: JSON.stringify({ reason, sendMessage: true, messageContent: 'Votre publication a été supprimée: ' + reason })
+            body: JSON.stringify({ reason: reason, sendMessage: true, messageContent: 'Votre publication a été supprimée: ' + reason })
         });
         showToast('Publication supprimée', 'success');
         loadAdminTab('posts', document.querySelector('.admin-nav-item:nth-child(3)'));
@@ -1355,13 +1628,13 @@ async function adminDeletePost(postId, authorId) {
 }
 
 async function banUser(userId) {
-    const reason = prompt('Raison du bannissement:');
+    var reason = prompt('Raison du bannissement:');
     if (!reason) return;
     
     try {
         await apiCall('/admin/ban/' + userId, {
             method: 'POST',
-            body: JSON.stringify({ banType: 'permanent', reason })
+            body: JSON.stringify({ banType: 'permanent', reason: reason })
         });
         showToast('Utilisateur banni', 'success');
         loadAdminTab('users', document.querySelector('.admin-nav-item:nth-child(2)'));
@@ -1383,31 +1656,36 @@ async function unbanUser(userId) {
 }
 
 function sendAdminMessage(userId) {
-    const message = prompt('Message à envoyer:');
+    var message = prompt('Message à envoyer:');
     if (!message) return;
     
     apiCall('/admin/message', {
         method: 'POST',
-        body: JSON.stringify({ userId, subject: 'Message admin', message, type: 'info' })
-    }).then(() => showToast('Message envoyé', 'success'))
-      .catch(e => showToast(e.message, 'error'));
+        body: JSON.stringify({ userId: userId, subject: 'Message admin', message: message, type: 'info' })
+    }).then(function() {
+        showToast('Message envoyé', 'success');
+    }).catch(function(e) {
+        showToast(e.message, 'error');
+    });
 }
 
 function addSocialLink() {
-    const platform = prompt('Nom (ex: Facebook):');
+    var platform = prompt('Nom (ex: Facebook):');
     if (!platform) return;
-    const url = prompt('URL:');
+    var url = prompt('URL:');
     if (!url) return;
-    const icon = prompt('Icône (ex: fab fa-facebook-f):') || 'fas fa-link';
+    var icon = prompt('Icône (ex: fab fa-facebook-f):') || 'fas fa-link';
     
     apiCall('/admin/social-links', {
         method: 'POST',
-        body: JSON.stringify({ platform, url, icon })
-    }).then(() => {
+        body: JSON.stringify({ platform: platform, url: url, icon: icon })
+    }).then(function() {
         showToast('Lien ajouté', 'success');
-        loadAdminTab('social', document.querySelector('.admin-nav-item:nth-child(4)'));
+        loadAdminTab('social', document.querySelector('.admin-nav-item:nth-child(6)'));
         loadSocialLinks();
-    }).catch(e => showToast(e.message, 'error'));
+    }).catch(function(e) {
+        showToast(e.message, 'error');
+    });
 }
 
 async function deleteSocialLink(linkId) {
@@ -1416,7 +1694,7 @@ async function deleteSocialLink(linkId) {
     try {
         await apiCall('/admin/social-links/' + linkId, { method: 'DELETE' });
         showToast('Lien supprimé', 'success');
-        loadAdminTab('social', document.querySelector('.admin-nav-item:nth-child(4)'));
+        loadAdminTab('social', document.querySelector('.admin-nav-item:nth-child(6)'));
         loadSocialLinks();
     } catch (error) {
         showToast(error.message, 'error');
@@ -1425,24 +1703,24 @@ async function deleteSocialLink(linkId) {
 
 async function loadSocialLinks() {
     try {
-        const links = await apiCall('/social-links');
-        const container = document.getElementById('footerSocial');
+        var links = await apiCall('/social-links');
+        var container = document.getElementById('footerSocial');
         
         if (links && links.length > 0) {
-            container.innerHTML = links.map(l => {
+            container.innerHTML = links.map(function(l) {
                 return '<a href="' + l.url + '" target="_blank"><i class="' + (l.icon || 'fas fa-link') + '"></i></a>';
             }).join('');
         }
     } catch (error) {
-        console.error('Error loading social links:', error);
+        console.log('Social links not available');
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                         🎯 EVENT LISTENERS
+//                         EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeLightbox();
         closeChat();
@@ -1453,13 +1731,13 @@ document.addEventListener('keydown', e => {
     }
 });
 
-// Fermer modals en cliquant dehors
-document.getElementById('authModal').addEventListener('click', e => {
+// Close modals on backdrop click
+document.getElementById('authModal').addEventListener('click', function(e) {
     if (e.target.id === 'authModal') closeAuthModal();
 });
 
-document.getElementById('responseModal').addEventListener('click', e => {
+document.getElementById('responseModal').addEventListener('click', function(e) {
     if (e.target.id === 'responseModal') closeResponseModal();
 });
 
-console.log('✅ MarketPlace Pro v3.0 loaded successfully!');
+console.log('✅ MarketPlace Pro v4.0 loaded successfully!');
