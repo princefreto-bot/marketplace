@@ -1763,4 +1763,4 @@ document.addEventListener('keydown', function(e) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
-console.log('✅ MarketPlace Pro App loaded successfully!');
+console.log('✅ MarketPlace Pro App loaded successfully! v2.1.0 - Mobile Optimized');
