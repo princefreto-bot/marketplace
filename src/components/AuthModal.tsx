@@ -39,9 +39,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     if (mode === 'login') {
       const result = await login(formData.email, formData.password);
+      setLoading(false);
       if (result.success) {
-        toast.show('Connexion réussie!', 'success');
-        onClose();
+        toast.show('Connexion réussie! Bienvenue!', 'success');
+        resetForm();
+        // Small delay to ensure state is updated before closing
+        setTimeout(() => {
+          onClose();
+        }, 100);
       } else {
         setError(result.error || 'Erreur de connexion');
       }
@@ -66,15 +71,18 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         localisation: formData.localisation,
       });
       
+      setLoading(false);
       if (result.success) {
-        toast.show('Inscription réussie!', 'success');
-        onClose();
+        toast.show('Inscription réussie! Bienvenue!', 'success');
+        resetForm();
+        // Small delay to ensure state is updated before closing
+        setTimeout(() => {
+          onClose();
+        }, 100);
       } else {
         setError(result.error || 'Erreur d\'inscription');
       }
     }
-    
-    setLoading(false);
   };
 
   const resetForm = () => {
@@ -212,16 +220,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         </Button>
       </form>
 
-      {mode === 'login' && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-xl">
-          <p className="text-sm text-gray-600 mb-2 font-medium">Comptes de test :</p>
-          <div className="space-y-1 text-xs text-gray-500">
-            <p>Admin: admin@localdeals.tg / admin123</p>
-            <p>Acheteur: marie@test.com / password123</p>
-            <p>Vendeur: jean@test.com / password123</p>
-          </div>
-        </div>
-      )}
+      {/* Section de test supprimée - Site en production */}
     </Modal>
   );
 }

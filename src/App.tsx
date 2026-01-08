@@ -28,6 +28,12 @@ export function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [pageData, setPageData] = useState<PageData>({});
   const [showAuth, setShowAuth] = useState(false);
+  const [, forceUpdate] = useState({});
+
+  // Force update when user changes
+  useEffect(() => {
+    forceUpdate({});
+  }, [user]);
 
   const handleNavigate = (page: string, data?: Record<string, unknown>) => {
     setCurrentPage(page as Page);

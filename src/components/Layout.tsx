@@ -21,8 +21,15 @@ export function Layout({ children, currentPage, onNavigate, onShowAuth }: Layout
   useEffect(() => {
     if (user) {
       setUnreadCount(getUnreadCount(user._id));
+    } else {
+      setUnreadCount(0);
     }
   }, [user, getUnreadCount]);
+
+  // Close mobile menu when user changes
+  useEffect(() => {
+    setShowMobileMenu(false);
+  }, [user]);
 
   const navItems = [
     { id: 'home' as Page, icon: HomeIcon, label: 'Accueil' },

@@ -29,6 +29,18 @@ export function useAuth() {
   });
   const [loading, setLoading] = useState(false);
 
+  // Subscribe to auth changes
+  useEffect(() => {
+    const checkAuth = () => {
+      const stored = localStorage.getItem(STORAGE_KEYS.USER);
+      const storedUser = stored ? JSON.parse(stored) : null;
+      setUser(storedUser);
+    };
+    
+    listeners.add(checkAuth);
+    return () => { listeners.delete(checkAuth); };
+  }, []);
+
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 500)); // Simulate network delay
