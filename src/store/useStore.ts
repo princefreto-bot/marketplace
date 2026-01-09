@@ -868,11 +868,21 @@ let socialLinksFetched = false;
 let socialLinksInFlight: Promise<void> | null = null;
 
 function normalizeSlider(raw: any): Slider {
+  // Handle image which can be string or object { url, publicId }
+  let imageUrl = "";
+  if (raw?.image) {
+    if (typeof raw.image === "string") {
+      imageUrl = raw.image;
+    } else if (typeof raw.image === "object" && raw.image.url) {
+      imageUrl = String(raw.image.url);
+    }
+  }
+
   return {
     _id: String(raw?._id || ""),
     title: String(raw?.title || ""),
     description: String(raw?.description || ""),
-    image: String(raw?.image || raw?.image?.url || ""),
+    image: imageUrl,
     buttonText: String(raw?.buttonText || ""),
     buttonLink: String(raw?.buttonLink || ""),
     isActive: Boolean(raw?.isActive ?? true),

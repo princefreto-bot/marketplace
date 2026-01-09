@@ -32,17 +32,39 @@ function normalizeCategorieToLabel(input) {
 }
 
 function demandeToClient(doc) {
-  const d = doc.toObject ? doc.toObject({ virtuals: false }) : doc;
-  const acheteurDoc = d.acheteurId && typeof d.acheteurId === "object" && d.acheteurId.toSafeJSON
-    ? d.acheteurId
+  // Check for populated acheteur BEFORE calling toObject (loses methods)
+  const rawDoc = doc.toObject ? doc : null;
+  const populatedAcheteur = rawDoc && rawDoc.acheteurId && typeof rawDoc.acheteurId === "object" && rawDoc.acheteurId.toSafeJSON
+    ? rawDoc.acheteurId.toSafeJSON()
     : null;
 
+  const d = doc.toObject ? doc.toObject({ virtuals: false }) : doc;
+  
+  // Fallback: if acheteurId is a plain object (already converted), extract user info
+  let acheteur = populatedAcheteur;
+  if (!acheteur && d.acheteurId && typeof d.acheteurId === "object" && d.acheteurId._id) {
+    const u = d.acheteurId;
+    acheteur = {
+      _id: String(u._id),
+      nom: u.nom || "Anonyme",
+      email: u.email || "",
+      role: u.role || "acheteur",
+      telephone: u.telephone || "",
+      localisation: u.localisation || "",
+      avatar: u.avatar && u.avatar.url ? u.avatar.url : `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nom || "User")}&background=2563EB&color=fff`,
+      isBanned: Boolean(u.isBanned),
+      dateCreation: u.dateCreation ? new Date(u.dateCreation).toISOString() : new Date().toISOString(),
+      lastLogin: u.lastLogin ? new Date(u.lastLogin).toISOString() : new Date().toISOString(),
+    };
+  }
+
+  const acheteurId = acheteur ? String(acheteur._id) : (typeof d.acheteurId === "string" ? d.acheteurId : String(d.acheteurId));
   const dateCreation = d.dateCreation ? new Date(d.dateCreation).toISOString() : new Date().toISOString();
 
   return {
     _id: String(d._id),
-    acheteurId: String(acheteurDoc ? acheteurDoc._id : d.acheteurId),
-    acheteur: acheteurDoc ? acheteurDoc.toSafeJSON() : undefined,
+    acheteurId,
+    acheteur,
     titre: d.titre,
     description: d.description,
     budget: d.budget,
