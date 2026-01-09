@@ -67,12 +67,17 @@ if (!fs.existsSync(indexPath)) {
 // Serve static files
 app.use(express.static(distPath, { maxAge: "1y", etag: true }));
 
-// SPA fallback pour toutes les routes GET non-API
-app.get("/*", (req, res) => {
-  if (fs.existsSync(indexPath)) {
+// SPA fallback pour toutes les routes GET non-API (Express 5 safe)
+app.use((req, res, next) => {
+  // Ignore les routes API
+  if (req.path.startsWith("/api")) return next();
+
+  if (req.method === "GET" && fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
-  } else {
+  } else if (req.method === "GET") {
     res.status(503).send("Application en cours de démarrage. Veuillez rafraîchir.");
+  } else {
+    next();
   }
 });
 
