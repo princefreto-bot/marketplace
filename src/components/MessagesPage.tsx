@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
 import { ChatIcon, ArrowRightIcon } from './Icons';
 import { Card, Avatar, Badge, EmptyState } from './UI';
-import { useAuth, useMessages, useUsers } from '../store/useStore';
+import { useAuth, useMessages } from '../store/useStore';
 import { Conversation } from '../types';
 
 interface MessagesPageProps {
@@ -11,14 +10,8 @@ interface MessagesPageProps {
 export function MessagesPage({ onNavigate }: MessagesPageProps) {
   const { user } = useAuth();
   const { getConversationsForUser } = useMessages();
-  const { getUserById } = useUsers();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
 
-  useEffect(() => {
-    if (user) {
-      setConversations(getConversationsForUser(user._id));
-    }
-  }, [user, getConversationsForUser]);
+  const conversations: Conversation[] = user ? getConversationsForUser(user._id) : [];
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -35,12 +28,11 @@ export function MessagesPage({ onNavigate }: MessagesPageProps) {
   };
 
   const handleOpenChat = (conv: Conversation) => {
-    const otherUser = getUserById(conv.otherUser._id);
     onNavigate('chat', {
       conversationId: conv.conversationId,
       demandeId: conv.demandeId,
       demandeTitre: conv.demandeTitre,
-      otherUserId: otherUser?._id,
+      otherUserId: conv.otherUser?._id,
     });
   };
 

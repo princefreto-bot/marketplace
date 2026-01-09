@@ -79,7 +79,10 @@ export function DemandeDetail({ demandeId, onNavigate, onShowAuth }: DemandeDeta
       setReponseMessage('');
       setShowRepondre(false);
       setReponses(getReponsesByDemande(demande._id));
+    } else {
+      toast.show(result.error || "Impossible d'envoyer la réponse", 'error');
     }
+
     setLoading(false);
   };
 

@@ -10,18 +10,21 @@ interface NotificationsPageProps {
 
 export function NotificationsPage({ onNavigate }: NotificationsPageProps) {
   const { user } = useAuth();
-  const { getNotifications, markAsRead, markAllAsRead } = useNotifications();
+  const { getNotifications, markAsRead, markAllAsRead, refreshNotifications } = useNotifications();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+    setNotifications(getNotifications(user._id));
+    // Refresh from API in background
+    void refreshNotifications(user._id).then(() => {
       setNotifications(getNotifications(user._id));
-    }
-  }, [user, getNotifications]);
+    });
+  }, [user, getNotifications, refreshNotifications]);
 
   const handleNotificationClick = async (notif: Notification) => {
     await markAsRead(notif._id);
-    setNotifications(getNotifications(user!._id));
+    if (user) setNotifications(getNotifications(user._id));
 
     // Redirect based on notification type
     switch (notif.type) {
@@ -49,10 +52,9 @@ export function NotificationsPage({ onNavigate }: NotificationsPageProps) {
   };
 
   const handleMarkAllAsRead = async () => {
-    if (user) {
-      await markAllAsRead(user._id);
-      setNotifications(getNotifications(user._id));
-    }
+    if (!user) return;
+    await markAllAsRead(user._id);
+    setNotifications(getNotifications(user._id));
   };
 
   const formatTime = (dateString: string) => {

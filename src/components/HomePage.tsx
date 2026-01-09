@@ -13,16 +13,11 @@ export function HomePage({ onNavigate }: HomePageProps) {
   const { getSliders, getStats } = useAdmin();
   const { getDemandes } = useDemandes();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [sliders, setSliders] = useState(getSliders());
-  const [stats, setStats] = useState(getStats());
-  const [topDemandes, setTopDemandes] = useState<(Demande & { acheteur?: { nom: string } })[]>([]);
 
-  useEffect(() => {
-    setSliders(getSliders());
-    setStats(getStats());
-    const demandes = getDemandes();
-    setTopDemandes(demandes.filter(d => d.badge).slice(0, 6));
-  }, [getSliders, getStats, getDemandes]);
+  const sliders = getSliders();
+  const stats = getStats();
+  const demandes = getDemandes();
+  const topDemandes: Demande[] = demandes.filter((d) => d.badge).slice(0, 6);
 
   useEffect(() => {
     if (sliders.length > 1) {

@@ -1,89 +1,93 @@
 import express from "express";
-import dotenv from "dotenv";
+import cors from "cors";
 import compression from "compression";
-import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { execSync } from "child_process";
+import fs from "fs";
 
-// 🔹 MongoDB + Routes
-import connectDB from "./config/db.js";
-import authRoutes from "./routes/auth.routes.js";
-import demandeRoutes from "./routes/demande.routes.js";
+import { connectMongo, requireEnv } from "./server/db.js";
+import authRoutes from "./server/routes/auth.js";
+import userRoutes from "./server/routes/users.js";
+import demandeRoutes from "./server/routes/demandes.js";
+import reponseRoutes from "./server/routes/reponses.js";
+import messageRoutes from "./server/routes/messages.js";
+import notificationRoutes from "./server/routes/notifications.js";
+import uploadRoutes from "./server/routes/upload.js";
+import statsRoutes from "./server/routes/stats.js";
+import adminRoutes from "./server/routes/admin.js";
+import publicRoutes from "./server/routes/public.js";
+import { seedIfEmpty } from "./server/utils/seed.js";
 
-// --------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 🔹 Load environment variables
-dotenv.config();
+const app = express();
+const PORT = process.env.PORT || 3000;
+const HOST = "0.0.0.0";
 
-// 🔹 Vérification de MONGO_URI
-if (!process.env.MONGO_URI) {
-  console.error("❌ MONGO_URI non défini !");
+// Required env vars (NO fallback)
+try {
+  requireEnv("MONGODB_URI");
+  requireEnv("JWT_SECRET");
+  requireEnv("CLOUDINARY_CLOUD_NAME");
+  requireEnv("CLOUDINARY_API_KEY");
+  requireEnv("CLOUDINARY_API_SECRET");
+} catch (e) {
+  console.error("❌", e?.message || e);
   process.exit(1);
 }
 
-// 🔹 Connexion MongoDB
-connectDB();
+app.use(compression());
+app.use(cors());
+app.use(express.json({ limit: "2mb" }));
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+// Health check
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, service: "local-deals-togo" });
+});
 
-// ------------------------------
-// Middleware
-// ------------------------------
-app.use(express.json());       // Parse JSON body
-app.use(compression());        // Gzip compression
+// API routes
+app.use("/api", authRoutes);
+app.use("/api", userRoutes);
+app.use("/api", demandeRoutes);
+app.use("/api", reponseRoutes);
+app.use("/api", messageRoutes);
+app.use("/api", notificationRoutes);
+app.use("/api", uploadRoutes);
+app.use("/api", statsRoutes);
+app.use("/api", adminRoutes);
+app.use("/api", publicRoutes);
 
-// ------------------------------
-// Routes API
-// ------------------------------
-app.use("/api/demandes", demandeRoutes);
-app.use("/api/auth", authRoutes);
 
-// ------------------------------
-// Frontend / SPA fallback
-// ------------------------------
+// Serve static SPA (expects `npm run build` executed by Render)
 const distPath = join(__dirname, "dist");
 const indexPath = join(distPath, "index.html");
 
-// Build auto si dist n'existe pas
-if (!fs.existsSync(indexPath)) {
-  console.log("📦 Application non compilée. Compilation automatique...");
-  try {
-    execSync("npm run build", {
-      stdio: "inherit",
-      cwd: __dirname,
-      env: { ...process.env, NODE_ENV: "production" }
-    });
-    console.log("✅ Build terminé !");
-  } catch (error) {
-    console.error("❌ Erreur lors du build :", error.message);
-    process.exit(1);
-  }
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath, { maxAge: "1y", etag: true }));
 }
 
-// Serve static files
-app.use(express.static(distPath, { maxAge: "1y", etag: true }));
-
-// SPA fallback pour toutes les routes GET non-API (Express 5 safe)
+// SPA fallback (Express 5 compatible)
 app.use((req, res, next) => {
-  // Ignore les routes API
-  if (req.path.startsWith("/api")) return next();
-
-  if (req.method === "GET" && fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else if (req.method === "GET") {
-    res.status(503).send("Application en cours de démarrage. Veuillez rafraîchir.");
-  } else {
-    next();
+  if (req.method === "GET" && !req.path.startsWith("/api") && req.headers.accept?.includes("text/html")) {
+    if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
   }
+  next();
 });
 
-// ------------------------------
-// Démarrage du serveur
-// ------------------------------
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Local Deals Togo est lancé sur le port ${PORT}`);
-});
+// Start ONLY after MongoDB is connected
+(async () => {
+  try {
+    await connectMongo();
+    await seedIfEmpty();
+
+    app.listen(PORT, HOST, () => {
+      console.log(`🚀 Local Deals Togo running on http://${HOST}:${PORT}`);
+    });
+  } catch (err) {
+    console.error("❌ Failed to connect MongoDB. Server will not start.");
+    console.error(err);
+    process.exit(1);
+  }
+})();
+

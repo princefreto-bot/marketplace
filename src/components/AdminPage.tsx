@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeftIcon, UsersIcon, ChartIcon, GridIcon, TrashIcon, BanIcon, CheckIcon, EditIcon } from './Icons';
 import { Card, Avatar, Badge, Button, Tabs, useToast, Modal, Input, Textarea } from './UI';
 import { useAuth, useAdmin } from '../store/useStore';
-import { User, Demande, SocialLink, Slider, Stats, CATEGORIES } from '../types';
+import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api';
+import { Slider, SocialLink, CATEGORIES } from '../types';
 
 interface AdminPageProps {
   onNavigate: (page: string, data?: Record<string, unknown>) => void;
@@ -10,20 +11,51 @@ interface AdminPageProps {
 
 export function AdminPage({ onNavigate }: AdminPageProps) {
   const { user } = useAuth();
-  const { getStats, getAllUsers, getAllPosts, banUser, unbanUser, deletePost, getSocialLinks, getSliders, updateSliders } = useAdmin();
+  const {
+    getStats,
+    refreshStats,
+    getAllUsers,
+    refreshAdminUsers,
+    getAllPosts,
+    refreshAdminPosts,
+    banUser,
+    unbanUser,
+    deletePost,
+    refreshPublicSocialLinks,
+    getSliders,
+    refreshPublicSliders,
+    sendAdminMessage,
+  } = useAdmin();
   const toast = useToast();
 
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [stats, setStats] = useState<Stats>({ totalUsers: 0, totalDemandes: 0, totalReponses: 0, totalMessages: 0 });
-  const [users, setUsers] = useState<User[]>([]);
-  const [posts, setPosts] = useState<(Demande & { acheteur?: User })[]>([]);
-  const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
-  const [sliders, setSliders] = useState<Slider[]>([]);
-  
+
+  const stats = getStats();
+  const users = getAllUsers();
+  const posts = getAllPosts();
+  const sliders = getSliders();
+
+  const [adminSocialLinks, setAdminSocialLinks] = useState<SocialLink[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [showSocialModal, setShowSocialModal] = useState(false);
+  const [editingSocialLink, setEditingSocialLink] = useState<SocialLink | null>(null);
+  const [socialForm, setSocialForm] = useState({
+    platform: '',
+    url: '',
+    icon: 'facebook',
+    isActive: true,
+    order: 1,
+  });
+
   const [showBanModal, setShowBanModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [banReason, setBanReason] = useState('');
-  
+
+  const [showAdminMessageModal, setShowAdminMessageModal] = useState(false);
+  const [adminMessageTitle, setAdminMessageTitle] = useState('Message admin');
+  const [adminMessageBody, setAdminMessageBody] = useState('');
+  const [adminMessageSending, setAdminMessageSending] = useState(false);
+
   const [showSliderModal, setShowSliderModal] = useState(false);
   const [editingSlider, setEditingSlider] = useState<Slider | null>(null);
   const [sliderForm, setSliderForm] = useState({
@@ -34,17 +66,130 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
     buttonLink: '',
   });
 
-  useEffect(() => {
-    refreshData();
-  }, []);
-
-  const refreshData = () => {
-    setStats(getStats());
-    setUsers(getAllUsers());
-    setPosts(getAllPosts());
-    setSocialLinks(getSocialLinks());
-    setSliders(getSliders());
+  const apiFetchAdminSocialLinks = async (): Promise<SocialLink[]> => {
+    const res = await apiGet<{ socialLinks: SocialLink[] }>("/api/admin/social-links", true);
+    const list = Array.isArray(res.socialLinks) ? res.socialLinks : [];
+    return list
+      .map((l) => ({
+        _id: String((l as any)._id),
+        platform: String((l as any).platform || ""),
+        url: String((l as any).url || ""),
+        icon: String((l as any).icon || "facebook"),
+        isActive: Boolean((l as any).isActive),
+        order: Number((l as any).order || 1),
+      }))
+      .sort((a, b) => a.order - b.order);
   };
+
+  const openAddSocialLink = () => {
+    setEditingSocialLink(null);
+    setSocialForm({
+      platform: '',
+      url: '',
+      icon: 'facebook',
+      isActive: true,
+      order: adminSocialLinks.length + 1,
+    });
+    setShowSocialModal(true);
+  };
+
+  const openEditSocialLink = (link: SocialLink) => {
+    setEditingSocialLink(link);
+    setSocialForm({
+      platform: link.platform,
+      url: link.url,
+      icon: link.icon,
+      isActive: link.isActive,
+      order: link.order,
+    });
+    setShowSocialModal(true);
+  };
+
+  const handleSaveSocialLink = async () => {
+    if (!socialForm.platform.trim() || !socialForm.url.trim()) {
+      toast.show('Plateforme et URL sont obligatoires', 'error');
+      return;
+    }
+
+    try {
+      const payload = {
+        platform: socialForm.platform.trim(),
+        url: socialForm.url.trim(),
+        icon: socialForm.icon,
+        isActive: socialForm.isActive,
+        order: Number(socialForm.order) || 1,
+      };
+
+      if (editingSocialLink) {
+        await apiPut<{ socialLink: SocialLink }>(`/api/admin/social-links/${editingSocialLink._id}`, payload, true);
+      } else {
+        await apiPost<{ socialLink: SocialLink }>(`/api/admin/social-links`, payload, true);
+      }
+
+      setShowSocialModal(false);
+      setEditingSocialLink(null);
+      setSocialForm({ platform: '', url: '', icon: 'facebook', isActive: true, order: 1 });
+
+      await loadAdminSocialLinks();
+      await refreshPublicSocialLinks();
+
+      toast.show('Réseau social sauvegardé', 'success');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur';
+      toast.show(msg, 'error');
+    }
+  };
+
+  const handleToggleSocialLink = async (link: SocialLink) => {
+    try {
+      await apiPut<{ socialLink: SocialLink }>(`/api/admin/social-links/${link._id}`, { isActive: !link.isActive }, true);
+      setAdminSocialLinks((prev) =>
+        prev.map((x) => (x._id === link._id ? { ...x, isActive: !x.isActive } : x))
+      );
+      await refreshPublicSocialLinks();
+      toast.show(!link.isActive ? 'Lien activé' : 'Lien désactivé', 'success');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur';
+      toast.show(msg, 'error');
+    }
+  };
+
+  const handleDeleteSocialLink = async (linkId: string) => {
+    if (!window.confirm('Supprimer ce lien social ?')) return;
+
+    try {
+      await apiDelete<{ success: boolean }>(`/api/admin/social-links/${linkId}`, true);
+      setAdminSocialLinks((prev) => prev.filter((x) => x._id !== linkId));
+      await refreshPublicSocialLinks();
+      toast.show('Lien supprimé', 'success');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur';
+      toast.show(msg, 'error');
+    }
+  };
+
+  const loadAdminSocialLinks = useCallback(async () => {
+    setSocialLoading(true);
+    try {
+      const res = await apiFetchAdminSocialLinks();
+      setAdminSocialLinks(res);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur';
+      toast.show(msg, 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    // Hydrate admin data from API in background
+    void refreshStats();
+    void refreshAdminUsers();
+    void refreshAdminPosts();
+    void refreshPublicSocialLinks();
+    void refreshPublicSliders();
+    void loadAdminSocialLinks();
+  }, [refreshStats, refreshAdminUsers, refreshAdminPosts, refreshPublicSocialLinks, refreshPublicSliders, loadAdminSocialLinks]);
 
   if (!user || user.role !== 'admin') {
     return (
@@ -68,51 +213,90 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
     setShowBanModal(false);
     setBanReason('');
     setSelectedUserId('');
-    refreshData();
+    void refreshAdminUsers();
+    void refreshStats();
     toast.show('Utilisateur banni', 'success');
   };
 
   const handleUnbanUser = async (userId: string) => {
     await unbanUser(userId);
-    refreshData();
+    void refreshAdminUsers();
+    void refreshStats();
     toast.show('Utilisateur débanni', 'success');
   };
 
   const handleDeletePost = async (postId: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce post ?')) {
       await deletePost(postId);
-      refreshData();
+      void refreshAdminPosts();
+      void refreshStats();
       toast.show('Post supprimé', 'success');
     }
   };
 
-  const handleSaveSlider = async () => {
-    const newSlider: Slider = {
-      _id: editingSlider?._id || `slider${Date.now()}`,
-      ...sliderForm,
-      isActive: true,
-      order: editingSlider?.order || sliders.length + 1,
-    };
-
-    if (editingSlider) {
-      const updated = sliders.map(s => s._id === editingSlider._id ? newSlider : s);
-      await updateSliders(updated);
-    } else {
-      await updateSliders([...sliders, newSlider]);
+  const handleSendAdminMessage = async () => {
+    if (!adminMessageBody.trim()) {
+      toast.show('Le message est obligatoire', 'error');
+      return;
     }
-    
-    setShowSliderModal(false);
-    setEditingSlider(null);
-    setSliderForm({ title: '', description: '', image: '', buttonText: '', buttonLink: '' });
-    refreshData();
-    toast.show('Slider sauvegardé', 'success');
+
+    setAdminMessageSending(true);
+    try {
+      const res = await sendAdminMessage({
+        title: adminMessageTitle.trim() || 'Message admin',
+        message: adminMessageBody.trim(),
+      });
+
+      setShowAdminMessageModal(false);
+      setAdminMessageBody('');
+
+      toast.show(`Message envoyé (${res.sentTo ?? 0} destinataire(s))`, 'success');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur';
+      toast.show(msg, 'error');
+    } finally {
+      setAdminMessageSending(false);
+    }
+  };
+
+  const handleSaveSlider = async () => {
+    try {
+      const payload = {
+        title: sliderForm.title,
+        description: sliderForm.description,
+        image: sliderForm.image,
+        buttonText: sliderForm.buttonText,
+        buttonLink: sliderForm.buttonLink,
+        isActive: true,
+        order: editingSlider?.order || sliders.length + 1,
+      };
+
+      if (editingSlider) {
+        await apiPut<{ slider: Slider }>(`/api/admin/sliders/${editingSlider._id}`, payload, true);
+      } else {
+        await apiPost<{ slider: Slider }>(`/api/admin/sliders`, payload, true);
+      }
+
+      setShowSliderModal(false);
+      setEditingSlider(null);
+      setSliderForm({ title: '', description: '', image: '', buttonText: '', buttonLink: '' });
+      void refreshPublicSliders();
+      toast.show('Slider sauvegardé', 'success');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur';
+      toast.show(msg, 'error');
+    }
   };
 
   const handleDeleteSlider = async (sliderId: string) => {
-    const updated = sliders.filter(s => s._id !== sliderId);
-    await updateSliders(updated);
-    refreshData();
-    toast.show('Slider supprimé', 'success');
+    try {
+      await apiDelete<{ success: boolean }>(`/api/admin/sliders/${sliderId}`, true);
+      void refreshPublicSliders();
+      toast.show('Slider supprimé', 'success');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur';
+      toast.show(msg, 'error');
+    }
   };
 
   const openEditSlider = (slider: Slider) => {
@@ -199,6 +383,10 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
                 <Button variant="outline" onClick={() => setActiveTab('sliders')}>
                   <EditIcon className="w-4 h-4 mr-2" />
                   Modifier les sliders
+                </Button>
+                <Button variant="outline" onClick={() => setShowAdminMessageModal(true)}>
+                  <span className="mr-2">📣</span>
+                  Message admin
                 </Button>
               </div>
             </Card>
@@ -333,26 +521,56 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
         {/* Social Links */}
         {activeTab === 'social' && (
           <div className="max-w-4xl mx-auto space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Réseaux sociaux</h2>
-            
-            {socialLinks.map((link) => (
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Réseaux sociaux</h2>
+              <Button onClick={openAddSocialLink}>Ajouter</Button>
+            </div>
+
+            {socialLoading && (
+              <Card className="p-4">
+                <p className="text-sm text-gray-500">Chargement...</p>
+              </Card>
+            )}
+
+            {!socialLoading && adminSocialLinks.length === 0 && (
+              <Card className="p-6">
+                <p className="text-sm text-gray-600">Aucun lien social. Ajoutez-en un.</p>
+              </Card>
+            )}
+
+            {!socialLoading && adminSocialLinks.map((link) => (
               <Card key={link._id} className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
                       {link.icon === 'facebook' && <span>📘</span>}
                       {link.icon === 'whatsapp' && <span>💬</span>}
                       {link.icon === 'instagram' && <span>📷</span>}
                       {link.icon === 'twitter' && <span>🐦</span>}
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{link.platform}</p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900">{link.platform}</p>
+                        <Badge variant={link.isActive ? 'success' : 'default'} size="sm">
+                          {link.isActive ? 'Actif' : 'Inactif'}
+                        </Badge>
+                      </div>
                       <p className="text-sm text-gray-500 truncate max-w-xs">{link.url}</p>
+                      <p className="text-xs text-gray-400">Ordre: {link.order}</p>
                     </div>
                   </div>
-                  <Badge variant={link.isActive ? 'success' : 'default'} size="sm">
-                    {link.isActive ? 'Actif' : 'Inactif'}
-                  </Badge>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button size="sm" variant="outline" onClick={() => handleToggleSocialLink(link)}>
+                      {link.isActive ? 'Désactiver' : 'Activer'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => openEditSocialLink(link)}>
+                      <EditIcon className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteSocialLink(link._id)}>
+                      <TrashIcon className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -414,6 +632,107 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
           <Button fullWidth onClick={handleSaveSlider}>
             Enregistrer
           </Button>
+        </div>
+      </Modal>
+
+      {/* Social Link Modal */}
+      <Modal
+        isOpen={showSocialModal}
+        onClose={() => setShowSocialModal(false)}
+        title={editingSocialLink ? 'Modifier le réseau' : 'Ajouter un réseau'}
+      >
+        <div className="space-y-4">
+          <Input
+            label="Plateforme"
+            value={socialForm.platform}
+            onChange={(e) => setSocialForm((p) => ({ ...p, platform: e.target.value }))}
+            placeholder="Facebook / WhatsApp / Instagram"
+          />
+          <Input
+            label="URL"
+            value={socialForm.url}
+            onChange={(e) => setSocialForm((p) => ({ ...p, url: e.target.value }))}
+            placeholder="https://..."
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Icône</label>
+              <select
+                className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                value={socialForm.icon}
+                onChange={(e) => setSocialForm((p) => ({ ...p, icon: e.target.value }))}
+              >
+                <option value="facebook">Facebook</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="instagram">Instagram</option>
+                <option value="twitter">Twitter</option>
+              </select>
+            </div>
+            <Input
+              label="Ordre"
+              type="number"
+              value={String(socialForm.order)}
+              onChange={(e) => setSocialForm((p) => ({ ...p, order: Number(e.target.value) }))}
+              placeholder="1"
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Actif</p>
+              <p className="text-xs text-gray-500">Affiché dans le footer</p>
+            </div>
+            <button
+              onClick={() => setSocialForm((p) => ({ ...p, isActive: !p.isActive }))}
+              className={`w-12 h-7 rounded-full p-1 transition-colors ${socialForm.isActive ? 'bg-blue-600' : 'bg-gray-300'}`}
+              type="button"
+            >
+              <span className={`block w-5 h-5 bg-white rounded-full transition-transform ${socialForm.isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="outline" fullWidth onClick={() => setShowSocialModal(false)}>
+              Annuler
+            </Button>
+            <Button fullWidth onClick={handleSaveSocialLink}>
+              Enregistrer
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Admin Message Modal */}
+      <Modal
+        isOpen={showAdminMessageModal}
+        onClose={() => setShowAdminMessageModal(false)}
+        title="Envoyer un message admin"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Titre"
+            value={adminMessageTitle}
+            onChange={(e) => setAdminMessageTitle(e.target.value)}
+            placeholder="Message admin"
+          />
+          <Textarea
+            label="Message"
+            value={adminMessageBody}
+            onChange={(e) => setAdminMessageBody(e.target.value)}
+            placeholder="Écrivez un message à envoyer à tous les utilisateurs..."
+            rows={4}
+          />
+          <div className="flex gap-3">
+            <Button variant="outline" fullWidth onClick={() => setShowAdminMessageModal(false)}>
+              Annuler
+            </Button>
+            <Button fullWidth loading={adminMessageSending} onClick={handleSendAdminMessage}>
+              Envoyer
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500">
+            Ce message sera envoyé comme notification à tous les utilisateurs.
+          </p>
         </div>
       </Modal>
     </div>

@@ -45,10 +45,10 @@ export function ChatPage({ conversationId, demandeId, demandeTitre, otherUserId,
     if (!user) return;
 
     setSending(true);
-    
+
     const images = imagePreview ? [{ url: imagePreview, publicId: `img_${Date.now()}` }] : [];
-    
-    await sendMessage({
+
+    const result = await sendMessage({
       conversationId,
       demandeId,
       demandeTitre,
@@ -58,11 +58,14 @@ export function ChatPage({ conversationId, demandeId, demandeTitre, otherUserId,
       images,
     });
 
-    setNewMessage('');
-    setImagePreview(null);
-    setMessages(getMessagesByConversation(conversationId));
+    if (result.success) {
+      setNewMessage('');
+      setImagePreview(null);
+      setMessages(getMessagesByConversation(result.conversationId || conversationId));
+      inputRef.current?.focus();
+    }
+
     setSending(false);
-    inputRef.current?.focus();
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
