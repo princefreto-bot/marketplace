@@ -1,11 +1,12 @@
 import express from "express";
 import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
 import compression from "compression";
 import fs from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { execSync } from "child_process";
 
-// 🔹 Import DB et routes
+// 🔹 MongoDB + Routes
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/auth.routes.js";
 import demandeRoutes from "./routes/demande.routes.js";
@@ -14,46 +15,60 @@ import demandeRoutes from "./routes/demande.routes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-dotenv.config(); // Active les variables d’environnement
+// 🔹 Load environment variables
+dotenv.config();
 
-// 🔹 Connexion MongoDB Atlas
-const MONGO_URI = process.env.MONGO_URI;
-if (!MONGO_URI) {
+// 🔹 Vérification de MONGO_URI
+if (!process.env.MONGO_URI) {
   console.error("❌ MONGO_URI non défini !");
   process.exit(1);
 }
 
-connectDB(); // Assure-toi que connectDB utilise process.env.MONGO_URI
+// 🔹 Connexion MongoDB
+connectDB();
 
-// --------------------------------------------------
-// 🔹 Création du serveur Express
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🔹 Middleware JSON
-app.use(express.json());
+// ------------------------------
+// Middleware
+// ------------------------------
+app.use(express.json());       // Parse JSON body
+app.use(compression());        // Gzip compression
 
-// 🔹 Compression pour optimiser les fichiers statiques
-app.use(compression());
-
-// --------------------------------------------------
-// 🔹 ROUTES API
+// ------------------------------
+// Routes API
+// ------------------------------
 app.use("/api/demandes", demandeRoutes);
 app.use("/api/auth", authRoutes);
 
-// --------------------------------------------------
-// 🔹 SERVIR LE FRONT (VITE BUILD)
+// ------------------------------
+// Frontend / SPA fallback
+// ------------------------------
 const distPath = join(__dirname, "dist");
 const indexPath = join(distPath, "index.html");
 
-if (!fs.existsSync(distPath)) {
-  console.warn("⚠️ Le dossier dist n'existe pas. Assure-toi d'avoir fait `npm run build` avant de déployer.");
+// Build auto si dist n'existe pas
+if (!fs.existsSync(indexPath)) {
+  console.log("📦 Application non compilée. Compilation automatique...");
+  try {
+    execSync("npm run build", {
+      stdio: "inherit",
+      cwd: __dirname,
+      env: { ...process.env, NODE_ENV: "production" }
+    });
+    console.log("✅ Build terminé !");
+  } catch (error) {
+    console.error("❌ Erreur lors du build :", error.message);
+    process.exit(1);
+  }
 }
 
+// Serve static files
 app.use(express.static(distPath, { maxAge: "1y", etag: true }));
 
-// SPA fallback pour React Router
-app.get("*", (req, res) => {
+// SPA fallback pour toutes les routes GET non-API
+app.get("/*", (req, res) => {
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
@@ -61,8 +76,9 @@ app.get("*", (req, res) => {
   }
 });
 
-// --------------------------------------------------
-// 🔹 LANCEMENT DU SERVEUR
+// ------------------------------
+// Démarrage du serveur
+// ------------------------------
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Local Deals Togo est lancé sur le port ${PORT}`);
 });
