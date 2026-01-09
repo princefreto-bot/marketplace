@@ -62,12 +62,12 @@ export async function seedIfEmpty(force = false) {
     },
   ]);
 
-  // Sliders avec images fiables
+  // Sliders avec images Unsplash
   await Slider.create([
     {
       title: "Bienvenue sur Local Deals Togo",
       description: "La première plateforme de petites annonces 100% togolaise",
-      image: { url: "https://picsum.photos/seed/slider1/1200/600", publicId: "seed_slider_1" },
+      image: { url: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200&h=600&fit=crop", publicId: "seed_slider_1" },
       buttonText: "Découvrir",
       buttonLink: "#demandes",
       isActive: true,
@@ -76,7 +76,7 @@ export async function seedIfEmpty(force = false) {
     {
       title: "Achetez et Vendez Facilement",
       description: "Des milliers d'offres près de chez vous",
-      image: { url: "https://picsum.photos/seed/slider2/1200/600", publicId: "seed_slider_2" },
+      image: { url: "https://images.unsplash.com/photo-1557821552-17105176677c?w=1200&h=600&fit=crop", publicId: "seed_slider_2" },
       buttonText: "Publier une annonce",
       buttonLink: "#publier",
       isActive: true,
@@ -85,7 +85,7 @@ export async function seedIfEmpty(force = false) {
     {
       title: "Rejoignez la Communauté",
       description: "Plus de 10 000 utilisateurs nous font confiance",
-      image: { url: "https://picsum.photos/seed/slider3/1200/600", publicId: "seed_slider_3" },
+      image: { url: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=1200&h=600&fit=crop", publicId: "seed_slider_3" },
       buttonText: "S'inscrire",
       buttonLink: "#inscription",
       isActive: true,
@@ -100,7 +100,7 @@ export async function seedIfEmpty(force = false) {
     { platform: "Instagram", url: "https://instagram.com/localdeals", icon: "instagram", isActive: true, order: 3 },
   ]);
 
-  // 3 demandes d'exemple avec images fiables
+  // 3 demandes d'exemple avec images Unsplash
   await Demande.create([
     {
       acheteurId: acheteur._id,
@@ -108,7 +108,7 @@ export async function seedIfEmpty(force = false) {
       description: "Je cherche un iPhone 14 Pro Max en bon état. Couleur noir ou violet, 256GB minimum.",
       budget: 450000,
       images: [
-        { url: "https://picsum.photos/seed/iphone/400/300", publicId: "seed_iphone_1" },
+        { url: "https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=400&h=300&fit=crop", publicId: "seed_iphone_1" },
       ],
       categorie: "Électronique",
       localisation: "Lomé, Togo",
@@ -122,7 +122,7 @@ export async function seedIfEmpty(force = false) {
       description: "Cherche un appartement F3 à Tokoin ou Djidjolé. Budget 150 000 FCFA/mois.",
       budget: 150000,
       images: [
-        { url: "https://picsum.photos/seed/appartement/400/300", publicId: "seed_apt_1" },
+        { url: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400&h=300&fit=crop", publicId: "seed_apt_1" },
       ],
       categorie: "Immobilier",
       localisation: "Lomé, Togo",
@@ -136,7 +136,7 @@ export async function seedIfEmpty(force = false) {
       description: "Recherche Toyota Corolla 2018 ou plus récente, kilométrage < 80 000 km.",
       budget: 8500000,
       images: [
-        { url: "https://picsum.photos/seed/toyota/400/300", publicId: "seed_toyota_1" },
+        { url: "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=400&h=300&fit=crop", publicId: "seed_toyota_1" },
       ],
       categorie: "Véhicules",
       localisation: "Lomé, Togo",

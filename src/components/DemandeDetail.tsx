@@ -11,7 +11,7 @@ interface DemandeDetailProps {
 }
 
 export function DemandeDetail({ demandeId, onNavigate, onShowAuth }: DemandeDetailProps) {
-  const { getDemandeById } = useDemandes();
+  const { getDemandeById, fetchDemandeById } = useDemandes();
   const { getReponsesByDemande, createReponse } = useReponses();
   const { startConversation } = useMessages();
   const { user } = useAuth();
@@ -25,13 +25,33 @@ export function DemandeDetail({ demandeId, onNavigate, onShowAuth }: DemandeDeta
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const d = getDemandeById(demandeId);
-    setDemande(d);
-    if (d) {
-      const r = getReponsesByDemande(d._id);
+    let mounted = true;
+    
+    // Charger depuis le cache d'abord
+    const cached = getDemandeById(demandeId);
+    if (cached && mounted) {
+      setDemande(cached);
+      const r = getReponsesByDemande(cached._id);
       setReponses(r);
     }
-  }, [demandeId, getDemandeById, getReponsesByDemande]);
+    
+    // Puis fetch depuis l'API pour avoir les données complètes (avec acheteur)
+    fetchDemandeById(demandeId).then((d) => {
+      if (mounted && d) {
+        setDemande({
+          ...d,
+          acheteur: d.acheteur,
+        });
+        const r = getReponsesByDemande(d._id);
+        setReponses(r);
+      }
+    }).catch(() => {
+      // Ignore errors, keep cached data
+    });
+    
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demandeId]);
 
   if (!demande) {
     return (

@@ -786,8 +786,10 @@ export function useNotifications() {
   const getUnreadCount = useCallback((userId: string) => {
     const key = String(userId);
 
-    // Always try to refresh count in background for accuracy
-    void refreshNotificationCountApi(key);
+    // Fetch count in background only if not already fetched
+    if (notificationCountByUser[key] === undefined && !notifCountInFlight[key]) {
+      void refreshNotificationCountApi(key);
+    }
 
     if (notificationCountByUser[key] !== undefined) return notificationCountByUser[key];
     const list = notificationsByUser[key];

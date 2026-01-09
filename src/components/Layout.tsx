@@ -19,12 +19,16 @@ export function Layout({ children, currentPage, onNavigate, onShowAuth }: Layout
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      setUnreadCount(getUnreadCount(user._id));
-    } else {
+    let mounted = true;
+    if (user && mounted) {
+      const count = getUnreadCount(user._id);
+      setUnreadCount(count);
+    } else if (mounted) {
       setUnreadCount(0);
     }
-  }, [user, getUnreadCount]);
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id]);
 
   // Close mobile menu when user changes
   useEffect(() => {
