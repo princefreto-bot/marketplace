@@ -1,80 +1,59 @@
-import authRoutes from "./routes/auth.routes.js";
-import demandeRoutes from "./routes/demande.routes.js";
 import express from "express";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import compression from "compression";
 import fs from "fs";
-import { execSync } from "child_process";
 
-// 🔹 MongoDB + API
+// 🔹 Import des routes et DB
 import connectDB from "./config/db.js";
+import authRoutes from "./routes/auth.routes.js";
 import demandeRoutes from "./routes/demande.routes.js";
 
 // --------------------------------------------------
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 dotenv.config();          // 🔹 Active les variables d’environnement
-connectDB();              // 🔹 Connexion MongoDB Atlas
+
+// 🔹 Connexion MongoDB Atlas
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error("❌ MONGO_URI non défini !");
+  process.exit(1);
+}
+
+connectDB(MONGO_URI);  // 🔹 Assure-toi que ta fonction connectDB prend l'URI comme paramètre
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🔹 Permet de lire le JSON envoyé par le site
+// 🔹 Middleware JSON
 app.use(express.json());
 
-// --------------------------------------------------
-// 🔹 ROUTES API (BACKEND)
+// 🔹 Compression pour le front
+app.use(compression());
+
+// 🔹 ROUTES API
 app.use("/api/demandes", demandeRoutes);
 app.use("/api/auth", authRoutes);
 
-
-// --------------------------------------------------
-// 🔹 PARTIE FRONT (INCHANGÉE)
-
-// Check if dist folder exists, if not, build the app
+// 🔹 FRONT (Vite build)
 const distPath = join(__dirname, "dist");
 const indexPath = join(distPath, "index.html");
 
-if (!fs.existsSync(indexPath)) {
-  console.log("📦 Application non compilée. Compilation automatique en cours...");
-  try {
-    execSync("npm run build", {
-      stdio: "inherit",
-      cwd: __dirname,
-      env: { ...process.env, NODE_ENV: "production" }
-    });
-    console.log("✅ Compilation terminée avec succès !");
-  } catch (error) {
-    console.error("❌ Erreur lors de la compilation :", error.message);
-    process.exit(1);
-  }
+if (!fs.existsSync(distPath)) {
+  console.warn("⚠️ Le dossier dist n'existe pas. Assure-toi d'avoir fait `npm run build` avant de déployer.");
 }
 
-// Enable compression
-app.use(compression());
+app.use(express.static(distPath, { maxAge: "1y", etag: true }));
 
-// Serve static files from the dist directory
-app.use(express.static(distPath, {
-  maxAge: "1y",
-  etag: true
-}));
-
-// Handle SPA routing (React / Vite)
-app.use((req, res, next) => {
-  if (req.method === "GET" && req.accepts("html")) {
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      res
-        .status(503)
-        .send("Application en cours de démarrage. Veuillez rafraîchir.");
-    }
+// SPA fallback
+app.get("*", (req, res) => {
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
   } else {
-    next();
+    res.status(503).send("Application en cours de démarrage. Veuillez rafraîchir.");
   }
 });
 
@@ -82,5 +61,4 @@ app.use((req, res, next) => {
 // 🔹 START SERVER
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Local Deals Togo is running on port ${PORT}`);
-  console.log(`   http://localhost:${PORT}`);
 });
