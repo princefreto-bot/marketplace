@@ -3,9 +3,19 @@ import { Demande } from "../models/Demande.js";
 import { Slider } from "../models/Slider.js";
 import { SocialLink } from "../models/SocialLink.js";
 
-export async function seedIfEmpty() {
+export async function seedIfEmpty(force = false) {
   const userCount = await User.countDocuments();
-  if (userCount > 0) return { seeded: false };
+  
+  // Si force=true, on supprime tout et on reseed
+  if (force) {
+    await User.deleteMany({});
+    await Demande.deleteMany({});
+    await Slider.deleteMany({});
+    await SocialLink.deleteMany({});
+    console.log("[SEED] Force reset: all data cleared");
+  } else if (userCount > 0) {
+    return { seeded: false };
+  }
 
   // IMPORTANT: User model already hashes password in pre-save.
   // Provide plaintext here.
@@ -52,12 +62,12 @@ export async function seedIfEmpty() {
     },
   ]);
 
-  // Sliders
+  // Sliders avec images fiables
   await Slider.create([
     {
       title: "Bienvenue sur Local Deals Togo",
       description: "La première plateforme de petites annonces 100% togolaise",
-      image: { url: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200", publicId: "seed_slider_1" },
+      image: { url: "https://picsum.photos/seed/slider1/1200/600", publicId: "seed_slider_1" },
       buttonText: "Découvrir",
       buttonLink: "#demandes",
       isActive: true,
@@ -66,7 +76,7 @@ export async function seedIfEmpty() {
     {
       title: "Achetez et Vendez Facilement",
       description: "Des milliers d'offres près de chez vous",
-      image: { url: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1200", publicId: "seed_slider_2" },
+      image: { url: "https://picsum.photos/seed/slider2/1200/600", publicId: "seed_slider_2" },
       buttonText: "Publier une annonce",
       buttonLink: "#publier",
       isActive: true,
@@ -75,7 +85,7 @@ export async function seedIfEmpty() {
     {
       title: "Rejoignez la Communauté",
       description: "Plus de 10 000 utilisateurs nous font confiance",
-      image: { url: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200", publicId: "seed_slider_3" },
+      image: { url: "https://picsum.photos/seed/slider3/1200/600", publicId: "seed_slider_3" },
       buttonText: "S'inscrire",
       buttonLink: "#inscription",
       isActive: true,
@@ -90,7 +100,7 @@ export async function seedIfEmpty() {
     { platform: "Instagram", url: "https://instagram.com/localdeals", icon: "instagram", isActive: true, order: 3 },
   ]);
 
-  // 3 demandes d'exemple
+  // 3 demandes d'exemple avec images fiables
   await Demande.create([
     {
       acheteurId: acheteur._id,
@@ -98,7 +108,7 @@ export async function seedIfEmpty() {
       description: "Je cherche un iPhone 14 Pro Max en bon état. Couleur noir ou violet, 256GB minimum.",
       budget: 450000,
       images: [
-        { url: "https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?w=400", publicId: "seed_iphone_1" },
+        { url: "https://picsum.photos/seed/iphone/400/300", publicId: "seed_iphone_1" },
       ],
       categorie: "Électronique",
       localisation: "Lomé, Togo",
@@ -112,7 +122,7 @@ export async function seedIfEmpty() {
       description: "Cherche un appartement F3 à Tokoin ou Djidjolé. Budget 150 000 FCFA/mois.",
       budget: 150000,
       images: [
-        { url: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400", publicId: "seed_apt_1" },
+        { url: "https://picsum.photos/seed/appartement/400/300", publicId: "seed_apt_1" },
       ],
       categorie: "Immobilier",
       localisation: "Lomé, Togo",
@@ -126,7 +136,7 @@ export async function seedIfEmpty() {
       description: "Recherche Toyota Corolla 2018 ou plus récente, kilométrage < 80 000 km.",
       budget: 8500000,
       images: [
-        { url: "https://images.unsplash.com/photo-1623869675781-80aa31012a5a?w=400", publicId: "seed_toyota_1" },
+        { url: "https://picsum.photos/seed/toyota/400/300", publicId: "seed_toyota_1" },
       ],
       categorie: "Véhicules",
       localisation: "Lomé, Togo",

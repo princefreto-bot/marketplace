@@ -11,6 +11,7 @@ import { Notification } from "../models/Notification.js";
 import { SocialLink } from "../models/SocialLink.js";
 import { Slider } from "../models/Slider.js";
 import { AdminAction } from "../models/AdminAction.js";
+import { seedIfEmpty } from "../utils/seed.js";
 
 const router = express.Router();
 
@@ -42,6 +43,20 @@ async function logAdminAction({ adminId, action, targetUserId, targetPostId, det
     // logging must never break admin operations
   }
 }
+
+// ===============
+// Force Re-seed (reset database)
+// ===============
+router.post("/admin/reseed", authRequired(), adminRequired(), async (req, res) => {
+  try {
+    const result = await seedIfEmpty(true);
+    await logAdminAction({ adminId: req.user._id, action: "reseed", details: result });
+    return res.json({ success: true, message: "Database reset complete", ...result });
+  } catch (err) {
+    console.error("[RESEED ERROR]", err);
+    return res.status(500).json({ message: "Server error during reseed" });
+  }
+});
 
 // ===============
 // Admin Stats
