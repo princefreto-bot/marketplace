@@ -53,9 +53,7 @@ export const useAuth = create<AuthState>((set) => ({
 
     try {
       const res = await fetch("/api/auth/me", {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (!res.ok) throw new Error();
@@ -80,19 +78,13 @@ interface DemandeState {
 export const useDemandes = create<DemandeState>((set) => ({
   demandes: [],
   loading: false,
-
   fetchDemandes: async () => {
     set({ loading: true });
-
     try {
       const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
-
       const res = await fetch("/api/demandes", {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
-
       const data = await res.json();
       set({ demandes: data });
     } catch (error) {
@@ -120,21 +112,15 @@ interface NotificationState {
 
 export const useNotifications = create<NotificationState>((set) => ({
   notifications: [],
-
-  addNotification: (notif) =>
-    set((state) => ({ notifications: [...state.notifications, notif] })),
-
+  addNotification: (notif) => set((state) => ({ notifications: [...state.notifications, notif] })),
   markAsRead: (id) =>
     set((state) => ({
       notifications: state.notifications.map((n) =>
         n.id === id ? { ...n, read: true } : n
       )
     })),
-
   removeNotification: (id) =>
-    set((state) => ({
-      notifications: state.notifications.filter((n) => n.id !== id)
-    }))
+    set((state) => ({ notifications: state.notifications.filter((n) => n.id !== id) }))
 }));
 
 /* ================= ADMIN STORE ================= */
@@ -146,5 +132,46 @@ interface AdminState {
 
 export const useAdmin = create<AdminState>((set) => ({
   isAdmin: false,
-  setAdmin: (value: boolean) => set({ isAdmin: value }),
+  setAdmin: (value: boolean) => set({ isAdmin: value })
+}));
+
+/* ================= REPONSES STORE ================= */
+
+interface Response {
+  id: string;
+  content: string;
+  authorId: string;
+}
+
+interface ReponseState {
+  reponses: Response[];
+  addReponse: (resp: Response) => void;
+  removeReponse: (id: string) => void;
+}
+
+export const useReponses = create<ReponseState>((set) => ({
+  reponses: [],
+  addReponse: (resp) => set((state) => ({ reponses: [...state.reponses, resp] })),
+  removeReponse: (id) => set((state) => ({ reponses: state.reponses.filter((r) => r.id !== id) }))
+}));
+
+/* ================= MESSAGES STORE ================= */
+
+interface Message {
+  id: string;
+  content: string;
+  authorId: string;
+  timestamp: string;
+}
+
+interface MessageState {
+  messages: Message[];
+  addMessage: (msg: Message) => void;
+  removeMessage: (id: string) => void;
+}
+
+export const useMessages = create<MessageState>((set) => ({
+  messages: [],
+  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+  removeMessage: (id) => set((state) => ({ messages: state.messages.filter((m) => m.id !== id) }))
 }));
