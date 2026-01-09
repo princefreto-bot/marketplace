@@ -175,3 +175,26 @@ export const useMessages = create<MessageState>((set) => ({
   addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
   removeMessage: (id) => set((state) => ({ messages: state.messages.filter((m) => m.id !== id) }))
 }));
+
+/* ================= USERS STORE ================= */
+
+interface UserData {
+  _id: string;
+  nom: string;
+  email: string;
+  avatar?: string;
+}
+
+interface UsersState {
+  users: UserData[];
+  setUsers: (users: UserData[]) => void;
+  addUser: (user: UserData) => void;
+  removeUser: (id: string) => void;
+}
+
+export const useUsers = create<UsersState>((set) => ({
+  users: [],
+  setUsers: (users) => set({ users }),
+  addUser: (user) => set((state) => ({ users: [...state.users, user] })),
+  removeUser: (id) => set((state) => ({ users: state.users.filter((u) => u._id !== id) }))
+}));
