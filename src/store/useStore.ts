@@ -309,20 +309,40 @@ export function useDemandes() {
   const createDemande = useCallback(
     async (data: Omit<Demande, '_id' | 'dateCreation' | 'status'>): Promise<{ success: boolean; demande?: Demande; error?: string }> => {
       try {
+        // Upload images base64 to Cloudinary first
+        let uploadedImages: { url: string; publicId: string }[] = [];
+        if (data.images && data.images.length > 0) {
+          for (const img of data.images) {
+            const url = String(img.url || "");
+            if (url.startsWith("data:")) {
+              // Upload base64 to Cloudinary
+              try {
+                const up = await apiPost<{ url: string; publicId: string }>("/api/upload/base64", { base64: url }, true);
+                uploadedImages.push({ url: up.url, publicId: up.publicId });
+              } catch (uploadErr) {
+                console.error("Image upload error:", uploadErr);
+                // Continue without this image
+              }
+            } else if (url) {
+              uploadedImages.push({ url, publicId: String(img.publicId || "") });
+            }
+          }
+        }
+
         const payload = {
           titre: data.titre,
           description: data.description,
           budget: data.budget,
-          images: data.images,
+          images: uploadedImages,
           categorie: data.categorie,
           localisation: data.localisation,
         };
 
         const res = await apiPost<{ demande: any }>("/api/demandes", payload, true);
-        const created = res.demande as Demande;
+        const created = normalizeDemande(res.demande);
 
         // Update cache
-        (demandes as any).unshift(created);
+        demandes.unshift(created);
         persistData();
         emit();
 
