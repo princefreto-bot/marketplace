@@ -19,7 +19,7 @@ interface AuthState {
 
 export const useAuth = create<AuthState>((set) => ({
   user: null,
-  token: localStorage.getItem("token"),
+  token: typeof localStorage !== "undefined" ? localStorage.getItem("token") : null,
 
   login: async (email, password) => {
     try {
@@ -32,7 +32,7 @@ export const useAuth = create<AuthState>((set) => ({
       if (!res.ok) return false;
 
       const data = await res.json();
-      localStorage.setItem("token", data.token);
+      if (typeof localStorage !== "undefined") localStorage.setItem("token", data.token);
 
       set({ token: data.token, user: data.user });
       return true;
@@ -42,11 +42,12 @@ export const useAuth = create<AuthState>((set) => ({
   },
 
   logout: () => {
-    localStorage.removeItem("token");
+    if (typeof localStorage !== "undefined") localStorage.removeItem("token");
     set({ user: null, token: null });
   },
 
   loadUser: async () => {
+    if (typeof localStorage === "undefined") return;
     const token = localStorage.getItem("token");
     if (!token) return;
 
@@ -84,7 +85,7 @@ export const useDemandes = create<DemandeState>((set) => ({
     set({ loading: true });
 
     try {
-      const token = localStorage.getItem("token");
+      const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
 
       const res = await fetch("/api/demandes", {
         headers: {
@@ -100,4 +101,38 @@ export const useDemandes = create<DemandeState>((set) => ({
       set({ loading: false });
     }
   }
+}));
+
+/* ================= NOTIFICATIONS STORE ================= */
+
+interface Notification {
+  id: string;
+  message: string;
+  read: boolean;
+}
+
+interface NotificationState {
+  notifications: Notification[];
+  addNotification: (notif: Notification) => void;
+  markAsRead: (id: string) => void;
+  removeNotification: (id: string) => void;
+}
+
+export const useNotifications = create<NotificationState>((set) => ({
+  notifications: [],
+
+  addNotification: (notif) =>
+    set((state) => ({ notifications: [...state.notifications, notif] })),
+
+  markAsRead: (id) =>
+    set((state) => ({
+      notifications: state.notifications.map((n) =>
+        n.id === id ? { ...n, read: true } : n
+      )
+    })),
+
+  removeNotification: (id) =>
+    set((state) => ({
+      notifications: state.notifications.filter((n) => n.id !== id)
+    }))
 }));
