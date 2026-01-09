@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeftIcon, UsersIcon, ChartIcon, GridIcon, TrashIcon, BanIcon, CheckIcon, EditIcon } from './Icons';
 import { Card, Avatar, Badge, Button, Tabs, useToast, Modal, Input, Textarea } from './UI';
 import { useAuth, useAdmin } from '../store/useStore';
@@ -36,7 +36,7 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
   const sliders = getSliders();
 
   const [adminSocialLinks, setAdminSocialLinks] = useState<SocialLink[]>([]);
-  const [socialLoading, setSocialLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(true);
   const [showSocialModal, setShowSocialModal] = useState(false);
   const [editingSocialLink, setEditingSocialLink] = useState<SocialLink | null>(null);
   const [socialForm, setSocialForm] = useState({
@@ -130,7 +130,7 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
       setEditingSocialLink(null);
       setSocialForm({ platform: '', url: '', icon: 'facebook', isActive: true, order: 1 });
 
-      await loadAdminSocialLinks();
+      await reloadAdminSocialLinks();
       await refreshPublicSocialLinks();
 
       toast.show('Réseau social sauvegardé', 'success');
@@ -168,28 +168,49 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
     }
   };
 
-  const loadAdminSocialLinks = useCallback(async () => {
-    setSocialLoading(true);
+  const reloadAdminSocialLinks = async () => {
     try {
       const res = await apiFetchAdminSocialLinks();
       setAdminSocialLinks(res);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erreur';
-      toast.show(msg, 'error');
-    } finally {
-      setSocialLoading(false);
+      console.error('Error loading social links:', e);
     }
-  }, [toast]);
+  };
 
+  // Initial load - run only once
   useEffect(() => {
-    // Hydrate admin data from API in background
-    void refreshStats();
-    void refreshAdminUsers();
-    void refreshAdminPosts();
-    void refreshPublicSocialLinks();
-    void refreshPublicSliders();
-    void loadAdminSocialLinks();
-  }, [refreshStats, refreshAdminUsers, refreshAdminPosts, refreshPublicSocialLinks, refreshPublicSliders, loadAdminSocialLinks]);
+    let mounted = true;
+    
+    const loadData = async () => {
+      // Load admin data from API
+      await Promise.all([
+        refreshStats(),
+        refreshAdminUsers(),
+        refreshAdminPosts(),
+        refreshPublicSocialLinks(),
+        refreshPublicSliders(),
+      ]);
+      
+      // Load admin social links (includes inactive)
+      if (mounted) {
+        try {
+          const res = await apiFetchAdminSocialLinks();
+          if (mounted) {
+            setAdminSocialLinks(res);
+            setSocialLoading(false);
+          }
+        } catch (e) {
+          console.error('Error loading admin social links:', e);
+          if (mounted) setSocialLoading(false);
+        }
+      }
+    };
+    
+    loadData();
+    
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!user || user.role !== 'admin') {
     return (
