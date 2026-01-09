@@ -63,7 +63,7 @@ export const useAuth = create<AuthState>((set) => ({
       const user = await res.json();
       set({ user, token });
     } catch {
-      localStorage.removeItem("token");
+      if (typeof localStorage !== "undefined") localStorage.removeItem("token");
       set({ user: null, token: null });
     }
   }
@@ -135,4 +135,16 @@ export const useNotifications = create<NotificationState>((set) => ({
     set((state) => ({
       notifications: state.notifications.filter((n) => n.id !== id)
     }))
+}));
+
+/* ================= ADMIN STORE ================= */
+
+interface AdminState {
+  isAdmin: boolean;
+  setAdmin: (value: boolean) => void;
+}
+
+export const useAdmin = create<AdminState>((set) => ({
+  isAdmin: false,
+  setAdmin: (value: boolean) => set({ isAdmin: value }),
 }));
