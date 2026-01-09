@@ -16,7 +16,7 @@ import uploadRoutes from "./server/routes/upload.js";
 import statsRoutes from "./server/routes/stats.js";
 import adminRoutes from "./server/routes/admin.js";
 import publicRoutes from "./server/routes/public.js";
-import { seedIfEmpty, runSeed } from "./server/utils/seed.js";
+import { seedIfEmpty } from "./server/utils/seed.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
