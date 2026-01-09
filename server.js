@@ -16,7 +16,7 @@ import uploadRoutes from "./server/routes/upload.js";
 import statsRoutes from "./server/routes/stats.js";
 import adminRoutes from "./server/routes/admin.js";
 import publicRoutes from "./server/routes/public.js";
-import { seedIfEmpty } from "./server/utils/seed.js";
+import { seedIfEmpty, runSeed } from "./server/utils/seed.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -79,6 +79,9 @@ app.use((req, res, next) => {
 (async () => {
   try {
     await connectMongo();
+    
+    // Seed SEULEMENT si la base est vide (premier démarrage ou après reset manuel)
+    // Les données persistent dans MongoDB Atlas même quand Render passe en veille
     await seedIfEmpty();
 
     app.listen(PORT, HOST, () => {
