@@ -1,7 +1,11 @@
 import { FacebookIcon, WhatsAppIcon, InstagramIcon, TwitterIcon, MailIcon, LocationIcon } from './Icons';
 import { useAdmin } from '../store/useStore';
 
-export function Footer() {
+interface FooterProps {
+  onNavigate?: (page: string) => void;
+}
+
+export function Footer({ onNavigate }: FooterProps) {
   const { getSocialLinks } = useAdmin();
   const socialLinks = getSocialLinks();
 
@@ -59,11 +63,31 @@ export function Footer() {
           <div>
             <h3 className="font-semibold mb-4">Liens Utiles</h3>
             <ul className="space-y-2 text-gray-400">
-              <li><a href="#" className="hover:text-white transition-colors">Accueil</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Toutes les demandes</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Publier une annonce</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Comment ça marche ?</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Conditions d'utilisation</a></li>
+              <li>
+                <button onClick={() => onNavigate?.('home')} className="hover:text-white transition-colors">
+                  Accueil
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onNavigate?.('demandes')} className="hover:text-white transition-colors">
+                  Toutes les demandes
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onNavigate?.('publish')} className="hover:text-white transition-colors">
+                  Publier une annonce
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onNavigate?.('legal')} className="hover:text-white transition-colors">
+                  Conditions d'utilisation
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onNavigate?.('legal')} className="hover:text-white transition-colors">
+                  Politique de confidentialité
+                </button>
+              </li>
             </ul>
           </div>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeftIcon, SendIcon, ImageIcon, CloseIcon } from './Icons';
+import { ArrowLeftIcon, SendIcon, ImageIcon, CloseIcon, CameraIcon } from './Icons';
 import { Avatar } from './UI';
 import { useAuth, useMessages, useUsers } from '../store/useStore';
 import { Message, User } from '../types';
@@ -72,11 +72,58 @@ export function ChatPage({ conversationId, demandeId, demandeTitre, otherUserId,
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
+    // Créer une image pour redimensionner et corriger l'orientation
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Limiter la taille max à 1200px
+      const maxSize = 1200;
+      let { width, height } = img;
+      
+      if (width > maxSize || height > maxSize) {
+        if (width > height) {
+          height = (height / width) * maxSize;
+          width = maxSize;
+        } else {
+          width = (width / height) * maxSize;
+          height = maxSize;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      if (ctx) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convertir en JPEG base64
+        const base64 = canvas.toDataURL('image/jpeg', 0.85);
+        setImagePreview(base64);
+      }
+      
+      URL.revokeObjectURL(objectUrl);
     };
-    reader.readAsDataURL(file);
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      // Fallback
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    };
+    
+    img.src = objectUrl;
+    
+    // Reset l'input
+    e.target.value = '';
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -224,11 +271,21 @@ export function ChatPage({ conversationId, demandeId, demandeTitre, otherUserId,
       {/* Input Area - TOUJOURS VISIBLE */}
       <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0 safe-bottom">
         <div className="flex items-end gap-2">
-          <label className="p-3 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors">
+          <label className="p-3 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors" title="Galerie">
             <ImageIcon className="w-6 h-6 text-gray-500" />
             <input
               type="file"
               accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+          </label>
+          <label className="p-3 rounded-xl hover:bg-blue-100 cursor-pointer transition-colors" title="Caméra">
+            <CameraIcon className="w-6 h-6 text-blue-500" />
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
               className="hidden"
               onChange={handleImageSelect}
             />

@@ -33,18 +33,71 @@ export function PublishPage({ onNavigate }: PublishPageProps) {
     const files = e.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file) => {
-      if (images.length >= 5) return;
+    Array.from(files).forEach((file, index) => {
+      if (images.length + index >= 5) return;
       
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImages(prev => [
-          ...prev,
-          { url: reader.result as string, publicId: `img_${Date.now()}` }
-        ]);
+      // Créer une image pour redimensionner et corriger l'orientation
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      
+      img.onload = () => {
+        // Créer un canvas pour redimensionner
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Limiter la taille max à 1200px
+        const maxSize = 1200;
+        let { width, height } = img;
+        
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = (height / width) * maxSize;
+            width = maxSize;
+          } else {
+            width = (width / height) * maxSize;
+            height = maxSize;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        if (ctx) {
+          // Fond blanc pour les images avec transparence
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convertir en JPEG base64 (meilleure compatibilité)
+          const base64 = canvas.toDataURL('image/jpeg', 0.85);
+          
+          setImages(prev => [
+            ...prev,
+            { url: base64, publicId: `img_${Date.now()}_${index}` }
+          ]);
+        }
+        
+        URL.revokeObjectURL(objectUrl);
       };
-      reader.readAsDataURL(file);
+      
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        // Fallback : utiliser FileReader classique
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImages(prev => [
+            ...prev,
+            { url: reader.result as string, publicId: `img_${Date.now()}_${index}` }
+          ]);
+        };
+        reader.readAsDataURL(file);
+      };
+      
+      img.src = objectUrl;
     });
+    
+    // Reset l'input pour pouvoir sélectionner le même fichier
+    e.target.value = '';
   };
 
   const removeImage = (index: number) => {
@@ -129,17 +182,32 @@ export function PublishPage({ onNavigate }: PublishPageProps) {
               ))}
               
               {images.length < 5 && (
-                <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
-                  <CameraIcon className="w-6 h-6 text-gray-400" />
-                  <span className="text-xs text-gray-500 mt-1">Ajouter</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleImageUpload}
-                  />
-                </label>
+                <div className="flex gap-2">
+                  {/* Bouton pour galerie */}
+                  <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                    <CameraIcon className="w-6 h-6 text-gray-400" />
+                    <span className="text-xs text-gray-500 mt-1">Galerie</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+                  {/* Bouton pour caméra directe */}
+                  <label className="w-24 h-24 border-2 border-dashed border-blue-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors bg-blue-50">
+                    <CameraIcon className="w-6 h-6 text-blue-500" />
+                    <span className="text-xs text-blue-600 mt-1">Photo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+                </div>
               )}
             </div>
           </div>

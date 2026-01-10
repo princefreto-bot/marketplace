@@ -724,7 +724,64 @@ export function useMessages() {
     return stableConversationId(demandeId, userId1, userId2);
   }, []);
 
-  return { refreshConversations, getConversationsForUser, refreshMessages, getMessagesByConversation, sendMessage, startConversation };
+  // Supprimer un message (seulement l'expéditeur peut supprimer)
+  const deleteMessage = useCallback(
+    async (messageId: string, conversationId: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        await apiDelete<{ success: boolean }>(`/api/messages/${messageId}`, true);
+
+        // Mettre à jour le cache
+        const key = String(conversationId);
+        if (messagesByConversation[key]) {
+          messagesByConversation[key] = messagesByConversation[key].filter((m) => m._id !== messageId);
+        }
+        messages = messages.filter((m) => m._id !== messageId);
+
+        persistData();
+        emit();
+
+        return { success: true };
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : "Erreur lors de la suppression";
+        return { success: false, error: msg };
+      }
+    },
+    []
+  );
+
+  // Supprimer une conversation entière
+  const deleteConversation = useCallback(
+    async (conversationId: string, userId: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        await apiDelete<{ success: boolean }>(`/api/conversations/${conversationId}`, true);
+
+        // Mettre à jour le cache
+        const key = String(conversationId);
+        delete messagesByConversation[key];
+        msgsFetched.delete(key);
+
+        // Supprimer de la liste des conversations
+        const userKey = String(userId);
+        if (conversationsByUser[userKey]) {
+          conversationsByUser[userKey] = conversationsByUser[userKey].filter((c) => c.conversationId !== conversationId);
+        }
+
+        // Supprimer les messages de la liste plate
+        messages = messages.filter((m) => m.conversationId !== conversationId);
+
+        persistData();
+        emit();
+
+        return { success: true };
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : "Erreur lors de la suppression";
+        return { success: false, error: msg };
+      }
+    },
+    []
+  );
+
+  return { refreshConversations, getConversationsForUser, refreshMessages, getMessagesByConversation, sendMessage, startConversation, deleteMessage, deleteConversation };
 }
 
 // Notifications (API MongoDB)

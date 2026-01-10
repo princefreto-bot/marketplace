@@ -178,4 +178,66 @@ router.get("/conversations/:userId", authRequired(), async (req, res) => {
   }
 });
 
+// DELETE /api/messages/:messageId (auth) - Supprimer un message (seulement l'expéditeur)
+router.delete("/messages/:messageId", authRequired(), async (req, res) => {
+  try {
+    const messageId = String(req.params.messageId);
+    
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+    
+    // Seul l'expéditeur ou un admin peut supprimer
+    if (String(message.senderId) !== String(req.user._id) && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Vous ne pouvez supprimer que vos propres messages" });
+    }
+    
+    await Message.findByIdAndDelete(messageId);
+    
+    // Supprimer aussi les notifications liées à ce message
+    await Notification.deleteMany({
+      type: "message",
+      "data.messageId": messageId,
+    });
+    
+    return res.json({ success: true, message: "Message supprimé" });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// DELETE /api/conversations/:conversationId (auth) - Supprimer une conversation entière
+router.delete("/conversations/:conversationId", authRequired(), async (req, res) => {
+  try {
+    const conversationId = String(req.params.conversationId);
+    
+    // Vérifier que l'utilisateur fait partie de la conversation
+    const oneMessage = await Message.findOne({
+      conversationId,
+      $or: [{ senderId: req.user._id }, { receiverId: req.user._id }],
+    });
+    
+    if (!oneMessage && req.user.role !== "admin") {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+    
+    // Supprimer tous les messages de la conversation
+    const result = await Message.deleteMany({ conversationId });
+    
+    // Supprimer les notifications liées à cette conversation
+    await Notification.deleteMany({
+      type: "message",
+      "data.conversationId": conversationId,
+    });
+    
+    return res.json({ 
+      success: true, 
+      message: `Conversation supprimée (${result.deletedCount} messages)` 
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 export default router;

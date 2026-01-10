@@ -11,9 +11,10 @@ import { NotificationsPage } from './components/NotificationsPage';
 import { ProfilePage } from './components/ProfilePage';
 import { AdminPage } from './components/AdminPage';
 import { Footer } from './components/Footer';
+import LegalPage from './components/LegalPage';
 import { useAuth } from './store/useStore';
 
-type Page = 'home' | 'demandes' | 'publish' | 'messages' | 'profile' | 'detail' | 'chat' | 'notifications' | 'admin';
+type Page = 'home' | 'demandes' | 'publish' | 'messages' | 'profile' | 'detail' | 'chat' | 'notifications' | 'admin' | 'legal';
 
 interface PageData {
   demandeId?: string;
@@ -58,7 +59,7 @@ export function App() {
         return (
           <>
             <HomePage onNavigate={handleNavigate} onShowAuth={handleShowAuth} />
-            <Footer />
+            <Footer onNavigate={handleNavigate} />
           </>
         );
       
@@ -69,7 +70,7 @@ export function App() {
               onNavigate={handleNavigate} 
               initialCategorie={pageData.categorie}
             />
-            <Footer />
+            <Footer onNavigate={handleNavigate} />
           </>
         );
       
@@ -113,13 +114,16 @@ export function App() {
       case 'admin':
         return <AdminPage onNavigate={handleNavigate} />;
       
+      case 'legal':
+        return <LegalPage onBack={() => handleNavigate('home')} />;
+      
       default:
         return <HomePage onNavigate={handleNavigate} onShowAuth={handleShowAuth} />;
     }
   };
 
   // Full screen pages (no layout wrapper)
-  if (currentPage === 'chat' || currentPage === 'admin') {
+  if (currentPage === 'chat' || currentPage === 'admin' || currentPage === 'legal') {
     return (
       <>
         {renderPage()}
