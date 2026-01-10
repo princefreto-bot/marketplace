@@ -612,6 +612,17 @@ export function useMessages() {
   const getConversationsForUser = useCallback(
     (userId: string): Conversation[] => {
       const key = String(userId);
+      
+      // Retourner immédiatement le cache s'il existe
+      if (conversationsByUser[key]?.length) {
+        // Rafraîchir en arrière-plan sans bloquer
+        if (!convInFlight[key]) {
+          void refreshConversations(key);
+        }
+        return conversationsByUser[key];
+      }
+      
+      // Premier chargement
       if (!convFetched.has(key)) {
         void refreshConversations(key);
       }
@@ -660,6 +671,17 @@ export function useMessages() {
   const getMessagesByConversation = useCallback(
     (conversationId: string) => {
       const key = String(conversationId);
+      
+      // Retourner immédiatement le cache s'il existe
+      if (messagesByConversation[key]?.length) {
+        // Rafraîchir en arrière-plan sans bloquer
+        if (!msgsInFlight[key]) {
+          void refreshMessages(key);
+        }
+        return messagesByConversation[key].slice().sort((a, b) => new Date(a.dateCreation).getTime() - new Date(b.dateCreation).getTime());
+      }
+      
+      // Premier chargement
       if (!msgsFetched.has(key)) {
         void refreshMessages(key);
       }

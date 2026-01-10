@@ -88,6 +88,58 @@ export function NotificationsPage({ onNavigate }: NotificationsPageProps) {
     }
   };
 
+  const getNotificationStyle = (type: Notification['type'], read: boolean) => {
+    if (read) return 'bg-white';
+    switch (type) {
+      case 'message':
+        return 'bg-blue-50 border-l-4 border-blue-500';
+      case 'reponse':
+        return 'bg-green-50 border-l-4 border-green-500';
+      case 'nouvelle_demande':
+        return 'bg-orange-50 border-l-4 border-orange-500';
+      case 'admin':
+        return 'bg-purple-50 border-l-4 border-purple-500';
+      case 'ban':
+        return 'bg-red-50 border-l-4 border-red-500';
+      default:
+        return 'bg-gray-50';
+    }
+  };
+
+  const getIconBgColor = (type: Notification['type']) => {
+    switch (type) {
+      case 'message':
+        return 'bg-blue-100';
+      case 'reponse':
+        return 'bg-green-100';
+      case 'nouvelle_demande':
+        return 'bg-orange-100';
+      case 'admin':
+        return 'bg-purple-100';
+      case 'ban':
+        return 'bg-red-100';
+      default:
+        return 'bg-gray-100';
+    }
+  };
+
+  const getTypeLabel = (type: Notification['type']) => {
+    switch (type) {
+      case 'message':
+        return 'Nouveau message';
+      case 'reponse':
+        return 'Nouvelle réponse';
+      case 'nouvelle_demande':
+        return 'Nouvelle demande';
+      case 'admin':
+        return 'Message admin';
+      case 'ban':
+        return 'Avertissement';
+      default:
+        return 'Notification';
+    }
+  };
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -133,28 +185,48 @@ export function NotificationsPage({ onNavigate }: NotificationsPageProps) {
               <button
                 key={notif._id}
                 onClick={() => handleNotificationClick(notif)}
-                className={`w-full p-4 flex items-start gap-3 text-left hover:bg-gray-50 transition-colors ${
-                  !notif.read ? 'bg-blue-50/50' : 'bg-white'
-                }`}
+                className={`w-full p-4 flex items-start gap-3 text-left hover:bg-gray-100/50 transition-all ${getNotificationStyle(notif.type, notif.read)}`}
               >
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${getIconBgColor(notif.type)}`}>
                   {getNotificationIcon(notif.type)}
                 </div>
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className={`font-medium ${!notif.read ? 'text-gray-900' : 'text-gray-700'}`}>
-                      {notif.data.title}
-                    </p>
-                    <span className="text-xs text-gray-500 flex-shrink-0">
+                    <div>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        notif.type === 'message' ? 'bg-blue-200 text-blue-800' :
+                        notif.type === 'reponse' ? 'bg-green-200 text-green-800' :
+                        notif.type === 'nouvelle_demande' ? 'bg-orange-200 text-orange-800' :
+                        notif.type === 'admin' ? 'bg-purple-200 text-purple-800' :
+                        notif.type === 'ban' ? 'bg-red-200 text-red-800' :
+                        'bg-gray-200 text-gray-800'
+                      }`}>
+                        {getTypeLabel(notif.type)}
+                      </span>
+                      <p className={`font-semibold mt-1 ${!notif.read ? 'text-gray-900' : 'text-gray-600'}`}>
+                        {notif.data.title}
+                      </p>
+                    </div>
+                    <span className="text-xs text-gray-500 flex-shrink-0 bg-white/50 px-2 py-1 rounded">
                       {formatTime(notif.dateCreation)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">{notif.data.message}</p>
+                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">{notif.data.message}</p>
+                  
+                  {/* Call to action */}
+                  <div className="mt-2">
+                    <span className="text-xs text-blue-600 font-medium">
+                      {notif.type === 'message' ? 'Ouvrir la conversation →' :
+                       notif.type === 'reponse' ? 'Voir la réponse →' :
+                       notif.type === 'nouvelle_demande' ? 'Voir la demande →' :
+                       'Voir les détails →'}
+                    </span>
+                  </div>
                 </div>
                 
                 {!notif.read && (
-                  <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-2" />
+                  <div className="w-3 h-3 bg-blue-600 rounded-full flex-shrink-0 mt-2 animate-pulse" />
                 )}
               </button>
             ))}

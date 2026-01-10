@@ -2,6 +2,9 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { User } from "../models/User.js";
+import { Demande } from "../models/Demande.js";
+import { Reponse } from "../models/Reponse.js";
+import { Notification } from "../models/Notification.js";
 import { authRequired } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -55,8 +58,102 @@ router.post("/login", async (req, res) => {
     const ok = await bcrypt.compare(String(password), user.password);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
+    const previousLogin = user.lastLogin || new Date(0);
     user.lastLogin = new Date();
     await user.save();
+
+    // Pour les vendeurs : créer des notifications pour les nouvelles demandes depuis la dernière connexion
+    if (user.role === "vendeur") {
+      try {
+        // Trouver les nouvelles demandes créées depuis la dernière connexion
+        const newDemandes = await Demande.find({
+          dateCreation: { $gt: previousLogin },
+          status: "active",
+          acheteurId: { $ne: user._id } // Pas ses propres demandes
+        })
+          .populate("acheteurId", "nom")
+          .sort({ dateCreation: -1 })
+          .limit(10); // Maximum 10 notifications
+
+        // Créer une notification pour chaque nouvelle demande
+        for (const demande of newDemandes) {
+          // Vérifier si une notification existe déjà pour cette demande
+          const existingNotif = await Notification.findOne({
+            userId: user._id,
+            type: "nouvelle_demande",
+            "data.demandeId": demande._id.toString()
+          });
+
+          if (!existingNotif) {
+            const budgetStr = demande.budget ? ` - ${demande.budget.toLocaleString()} FCFA` : "";
+            await Notification.create({
+              userId: user._id,
+              type: "nouvelle_demande",
+              data: {
+                demandeId: demande._id.toString(),
+                demandeTitre: demande.titre,
+                categorie: demande.categorie,
+                message: `${demande.categorie}: "${demande.titre}"${budgetStr}`
+              }
+            });
+          }
+        }
+      } catch (notifErr) {
+        // Ne pas bloquer la connexion si les notifications échouent
+        console.error("Error creating vendor login notifications:", notifErr);
+      }
+    }
+
+    // Pour les acheteurs : créer des notifications pour les nouvelles réponses à leurs demandes
+    if (user.role === "acheteur") {
+      try {
+        // Trouver les demandes de cet acheteur
+        const mesDemandes = await Demande.find({ acheteurId: user._id, status: "active" });
+        const mesDemandeIds = mesDemandes.map(d => d._id);
+
+        if (mesDemandeIds.length > 0) {
+          // Trouver les nouvelles réponses depuis la dernière connexion
+          const newReponses = await Reponse.find({
+            demandeId: { $in: mesDemandeIds },
+            dateCreation: { $gt: previousLogin }
+          })
+            .populate("vendeurId", "nom")
+            .populate("demandeId", "titre")
+            .sort({ dateCreation: -1 })
+            .limit(10);
+
+          // Créer une notification pour chaque nouvelle réponse
+          for (const reponse of newReponses) {
+            // Vérifier si une notification existe déjà pour cette réponse
+            const existingNotif = await Notification.findOne({
+              userId: user._id,
+              type: "reponse",
+              "data.reponseId": reponse._id.toString()
+            });
+
+            if (!existingNotif) {
+              const vendeurNom = reponse.vendeurId?.nom || "Un vendeur";
+              const demandeTitre = reponse.demandeId?.titre || "votre demande";
+              await Notification.create({
+                userId: user._id,
+                type: "reponse",
+                data: {
+                  reponseId: reponse._id.toString(),
+                  demandeId: reponse.demandeId?._id?.toString() || "",
+                  demandeTitre: demandeTitre,
+                  vendeurId: reponse.vendeurId?._id?.toString() || "",
+                  vendeurNom: vendeurNom,
+                  message: `${vendeurNom} a répondu à "${demandeTitre}"`
+                }
+              });
+            }
+          }
+        }
+      } catch (notifErr) {
+        // Ne pas bloquer la connexion si les notifications échouent
+        console.error("Error creating buyer login notifications:", notifErr);
+      }
+    }
 
     const token = signToken(user._id);
     return res.json({ token, user: user.toSafeJSON() });

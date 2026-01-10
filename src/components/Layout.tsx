@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { HomeIcon, SearchIcon, PlusIcon, ChatIcon, UserIcon, BellIcon, MenuIcon, CloseIcon, LogoutIcon, SettingsIcon } from './Icons';
 import { Avatar, Badge } from './UI';
 import { useAuth, useNotifications } from '../store/useStore';
@@ -14,21 +14,43 @@ interface LayoutProps {
 
 export function Layout({ children, currentPage, onNavigate, onShowAuth }: LayoutProps) {
   const { user, logout } = useAuth();
-  const { getUnreadCount } = useNotifications();
+  const { getUnreadCount, refreshNotifications } = useNotifications();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    let mounted = true;
-    if (user && mounted) {
+  // Fonction pour rafraîchir le compteur
+  const refreshCount = useCallback(async () => {
+    if (user) {
+      await refreshNotifications(user._id);
       const count = getUnreadCount(user._id);
       setUnreadCount(count);
+    } else {
+      setUnreadCount(0);
+    }
+  }, [user, getUnreadCount, refreshNotifications]);
+
+  // Rafraîchir immédiatement à la connexion et périodiquement
+  useEffect(() => {
+    let mounted = true;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    
+    if (user && mounted) {
+      // Rafraîchir immédiatement
+      refreshCount();
+      
+      // Puis toutes les 15 secondes
+      interval = setInterval(() => {
+        if (mounted) refreshCount();
+      }, 15000);
     } else if (mounted) {
       setUnreadCount(0);
     }
-    return () => { mounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?._id]);
+    
+    return () => { 
+      mounted = false; 
+      if (interval) clearInterval(interval);
+    };
+  }, [user?._id, refreshCount]);
 
   // Close mobile menu when user changes
   useEffect(() => {

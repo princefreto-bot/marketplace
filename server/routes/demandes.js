@@ -110,16 +110,19 @@ router.post("/demandes", authRequired(), async (req, res) => {
     // Validate category against enum by letting Mongoose validate
     const demande = await Demande.create(payload);
 
-    // Create notification for vendors
+    // Create notification for all vendors with category info
     const vendors = await User.find({ role: "vendeur", isBanned: false }).select("_id nom");
     if (vendors.length) {
+      const categoryLabel = demande.categorie || "Autre";
       const notifDocs = vendors.map((v) => ({
         userId: v._id,
         type: "nouvelle_demande",
         data: {
-          title: "Nouvelle demande",
-          message: `Nouvelle demande: \"${demande.titre}\"`,
+          title: "Nouvelle demande disponible",
+          message: `${categoryLabel}: "${demande.titre}" - ${demande.budget?.toLocaleString() || 0} FCFA`,
           demandeId: String(demande._id),
+          categorie: categoryLabel,
+          budget: demande.budget,
         },
         read: false,
         dateCreation: new Date(),
