@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { HomeIcon, SearchIcon, PlusIcon, ChatIcon, UserIcon, BellIcon, MenuIcon, CloseIcon, LogoutIcon, SettingsIcon } from './Icons';
 import { Avatar, Badge } from './UI';
 import { useAuth, useNotifications } from '../store/useStore';
@@ -17,40 +17,46 @@ export function Layout({ children, currentPage, onNavigate, onShowAuth }: Layout
   const { getUnreadCount, refreshNotifications } = useNotifications();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const refreshingRef = useRef(false);
+  const mountedRef = useRef(true);
 
-  // Fonction pour rafraîchir le compteur
-  const refreshCount = useCallback(async () => {
-    if (user) {
-      await refreshNotifications(user._id);
-      const count = getUnreadCount(user._id);
-      setUnreadCount(count);
-    } else {
-      setUnreadCount(0);
-    }
-  }, [user, getUnreadCount, refreshNotifications]);
-
-  // Rafraîchir immédiatement à la connexion et périodiquement
+  // Rafraîchir le compteur - sans dépendances qui changent
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
     let interval: ReturnType<typeof setInterval> | null = null;
     
-    if (user && mounted) {
-      // Rafraîchir immédiatement
-      refreshCount();
+    const doRefresh = async () => {
+      if (!user || refreshingRef.current || !mountedRef.current) return;
       
-      // Puis toutes les 15 secondes
-      interval = setInterval(() => {
-        if (mounted) refreshCount();
-      }, 15000);
-    } else if (mounted) {
+      refreshingRef.current = true;
+      try {
+        await refreshNotifications(user._id);
+        if (mountedRef.current) {
+          const count = getUnreadCount(user._id);
+          setUnreadCount(count);
+        }
+      } catch {
+        // Silently ignore
+      } finally {
+        refreshingRef.current = false;
+      }
+    };
+    
+    if (user) {
+      // Rafraîchir immédiatement
+      doRefresh();
+      
+      // Puis toutes les 30 secondes (moins fréquent pour éviter le clignotement)
+      interval = setInterval(doRefresh, 30000);
+    } else {
       setUnreadCount(0);
     }
     
     return () => { 
-      mounted = false; 
+      mountedRef.current = false;
       if (interval) clearInterval(interval);
     };
-  }, [user?._id, refreshCount]);
+  }, [user?._id]); // Seulement user._id comme dépendance
 
   // Close mobile menu when user changes
   useEffect(() => {
