@@ -1,0 +1,26 @@
+{
+  "name": "residence-monorepo",
+  "version": "1.0.0",
+  "description": "RÉSIDENCE - Plateforme d'intermédiation immobilière premium",
+  "private": true,
+  "scripts": {
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm run preview",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "cd backend && npm start",
+    "build": "cd frontend && npm install && npm run build"
+  },
+  "keywords": [
+    "immobilier",
+    "lome",
+    "togo",
+    "residence"
+  ],
+  "author": "RÉSIDENCE",
+  "license": "ISC"
+}

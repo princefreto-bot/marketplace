@@ -124,33 +124,81 @@ VITE_MODE=development
 
 ## 📦 Déploiement sur Render
 
-### 1. Backend (Web Service)
+### ⚠️ IMPORTANT : Structure du projet
+
+Ce projet utilise une architecture **monorepo** avec `backend/` et `frontend/` dans des sous-dossiers. Vous devez configurer le **Root Directory** correctement.
+
+### Option A : Déploiement via Blueprint (Recommandé)
+
+1. Fork/Push ce repository sur GitHub
+2. Aller sur [Render Dashboard](https://dashboard.render.com)
+3. Cliquer sur **New** → **Blueprint**
+4. Connecter votre repository
+5. Render détectera automatiquement le fichier `render.yaml`
+6. Configurer les variables secrètes manuellement :
+   - `MONGODB_URI`
+   - `CINETPAY_API_KEY`
+   - `CINETPAY_SITE_ID`
+   - `CINETPAY_SECRET_KEY`
+   - `ADMIN_PASSWORD`
+
+### Option B : Déploiement Manuel
+
+#### 1. Backend (Web Service)
 
 1. Créer un nouveau **Web Service** sur Render
 2. Connecter votre repository GitHub
-3. Configuration :
+3. **⚠️ Configuration IMPORTANTE** :
+   - **Root Directory**: `backend` ← NE PAS OUBLIER !
    - **Build Command**: `npm install`
    - **Start Command**: `npm start`
-   - **Root Directory**: `backend`
-4. Ajouter les **Environment Variables** depuis `.env`
+   - **Environment**: `Node`
+4. Ajouter les **Environment Variables** :
 
-### 2. Frontend (Static Site)
+| Variable | Valeur |
+|----------|--------|
+| `NODE_ENV` | `production` |
+| `PORT` | `5000` |
+| `MONGODB_URI` | `mongodb+srv://...` |
+| `JWT_SECRET` | (générer une clé sécurisée) |
+| `JWT_EXPIRES_IN` | `7d` |
+| `CINETPAY_API_KEY` | (votre clé) |
+| `CINETPAY_SITE_ID` | (votre site ID) |
+| `CINETPAY_SECRET_KEY` | (votre secret) |
+| `CINETPAY_SANDBOX` | `true` |
+| `FRONTEND_URL` | `https://votre-frontend.onrender.com` |
+| `ADMIN_EMAIL` | `admin@residence.tg` |
+| `ADMIN_PASSWORD` | (mot de passe fort) |
+
+#### 2. Frontend (Static Site)
 
 1. Créer un nouveau **Static Site** sur Render
 2. Connecter votre repository GitHub
-3. Configuration :
+3. **⚠️ Configuration IMPORTANTE** :
+   - **Root Directory**: `frontend` ← NE PAS OUBLIER !
    - **Build Command**: `npm install && npm run build`
    - **Publish Directory**: `dist`
-   - **Root Directory**: `frontend`
 4. Ajouter les **Environment Variables** :
-   - `VITE_API_URL` = URL de votre backend
+
+| Variable | Valeur |
+|----------|--------|
+| `VITE_API_URL` | `https://votre-backend.onrender.com/api` |
+| `VITE_MODE` | `production` |
 
 ### 3. MongoDB Atlas
 
 1. Créer un cluster gratuit sur [MongoDB Atlas](https://cloud.mongodb.com)
 2. Créer un utilisateur de base de données
-3. Whitelister les IPs (0.0.0.0/0 pour Render)
-4. Copier la connection string dans `MONGODB_URI`
+3. **Network Access** : Ajouter `0.0.0.0/0` (autoriser toutes les IPs pour Render)
+4. Copier la connection string et remplacer `<password>` par le mot de passe
+5. Coller dans `MONGODB_URI` sur Render
+
+### 4. Vérification du déploiement
+
+1. Backend : Visiter `https://votre-backend.onrender.com/api/health`
+   - Réponse attendue : `{"status":"OK","message":"RÉSIDENCE API is running"}`
+2. Frontend : Visiter `https://votre-frontend.onrender.com`
+3. Tester la connexion admin avec les identifiants configurés
 
 ---
 
