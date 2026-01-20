@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "RÉSIDENCE - Plateforme d'intermédiation immobilière premium",
   "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "install:backend": "cd backend && npm install",
     "install:frontend": "cd frontend && npm install",
@@ -13,7 +16,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "build:frontend": "cd frontend && npm run build",
     "start": "cd backend && npm start",
-    "build": "cd frontend && npm install && npm run build"
+    "build": "echo 'Use specific service builds'"
   },
   "keywords": [
     "immobilier",
